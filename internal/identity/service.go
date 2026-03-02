@@ -6,15 +6,20 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ErrEmailTaken is returned when the email is already registered.
+var ErrEmailTaken = errors.New("email already registered")
 
 const (
 	sessionTTL = 15 * time.Minute
@@ -56,6 +61,67 @@ type LoginRequest struct {
 type LoginResponse struct {
 	AccessToken string
 	ExpiresAt   time.Time
+}
+
+// RegisterRequest carries new-account details from the HTTP layer.
+type RegisterRequest struct {
+	Email    string
+	Password string
+}
+
+// Register creates a new user account and returns a JWT, the same as Login.
+// Returns ErrEmailTaken if the email is already in use.
+func (s *Service) Register(ctx context.Context, req RegisterRequest) (*LoginResponse, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	var userID, kycStatus string
+	err = s.db.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash) VALUES ($1, $2)
+		 RETURNING id, kyc_status`,
+		req.Email, string(hash),
+	).Scan(&userID, &kycStatus)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrEmailTaken
+		}
+		return nil, fmt.Errorf("insert user: %w", err)
+	}
+
+	sessionID, err := randomHex(16)
+	if err != nil {
+		return nil, fmt.Errorf("generate session id: %w", err)
+	}
+
+	expiresAt := time.Now().Add(jwtTTL)
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "sportsbook",
+		},
+		UserID:    userID,
+		KYCStatus: kycStatus,
+		SessionID: sessionID,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(s.jwtSecret)
+	if err != nil {
+		return nil, fmt.Errorf("sign jwt: %w", err)
+	}
+
+	sessionKey := fmt.Sprintf("session:%s", sessionID)
+	sessionVal := fmt.Sprintf("%s|%s", userID, kycStatus)
+	if err := s.redisSession.Set(ctx, sessionKey, sessionVal, sessionTTL).Err(); err != nil {
+		return nil, fmt.Errorf("store session: %w", err)
+	}
+
+	s.logger.Info("identity: register success", "user_id", userID)
+	return &LoginResponse{AccessToken: signed, ExpiresAt: expiresAt}, nil
 }
 
 // Login verifies credentials and issues a JWT + Redis session.

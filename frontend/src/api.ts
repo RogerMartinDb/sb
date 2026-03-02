@@ -94,3 +94,8 @@ export async function login(email: string, password: string): Promise<string> {
   const res = await post<{ access_token: string }>('/identity/auth/login', { email, password })
   return res.access_token
 }
+
+export async function register(email: string, password: string): Promise<string> {
+  const res = await post<{ access_token: string }>('/identity/auth/register', { email, password })
+  return res.access_token
+}

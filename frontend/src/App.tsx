@@ -2,21 +2,26 @@ import { useState } from 'react'
 import BetSlip from './components/BetSlip'
 import MyBets from './components/MyBets'
 import Login from './components/Login'
+import Register from './components/Register'
 import { setAuthToken } from './api'
 
 type Tab = 'bet' | 'mybets'
+type AuthView = 'login' | 'register'
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('bet')
+  const [authView, setAuthView] = useState<AuthView>('login')
 
-  function handleLogin(t: string) {
+  function handleAuth(t: string) {
     setAuthToken(t)
     setToken(t)
   }
 
   if (!token) {
-    return <Login onLogin={handleLogin} />
+    return authView === 'login'
+      ? <Login onLogin={handleAuth} onSwitchToRegister={() => setAuthView('register')} />
+      : <Register onRegister={handleAuth} onSwitchToLogin={() => setAuthView('login')} />
   }
 
   return (
