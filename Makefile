@@ -1,4 +1,4 @@
-.PHONY: proto build test migrate-all up down
+.PHONY: proto build test migrate-all up down run-all kill-all
 
 PROTO_DIR := proto
 GEN_DIR   := gen
@@ -23,7 +23,28 @@ proto:
 
 # ── Build all services ────────────────────────────────────────────────────────
 build:
-	go build ./cmd/...
+	mkdir -p bin && go build -o bin/ ./cmd/...
+
+# ── Kill all running services ────────────────────────────────────────────────
+kill-all:
+	@for svc in betacceptance wallet catalog odds marketdata bethistory settlement identity; do \
+		pkill -x $$svc 2>/dev/null || true; \
+	done
+	@echo "all services stopped"
+
+# ── Run all services (color-prefixed, Ctrl-C stops everything) ───────────────
+run-all:
+	@trap 'kill 0' EXIT; \
+	e=$$(printf '\033'); \
+	go run ./cmd/betacceptance 2>&1 | sed "s/^/$${e}[31m[betacceptance]$${e}[0m /" & \
+	go run ./cmd/wallet        2>&1 | sed "s/^/$${e}[32m[wallet       ]$${e}[0m /" & \
+	go run ./cmd/catalog       2>&1 | sed "s/^/$${e}[33m[catalog      ]$${e}[0m /" & \
+	go run ./cmd/odds          2>&1 | sed "s/^/$${e}[34m[odds         ]$${e}[0m /" & \
+	go run ./cmd/marketdata    2>&1 | sed "s/^/$${e}[35m[marketdata   ]$${e}[0m /" & \
+	go run ./cmd/bethistory    2>&1 | sed "s/^/$${e}[36m[bethistory   ]$${e}[0m /" & \
+	go run ./cmd/settlement    2>&1 | sed "s/^/$${e}[91m[settlement   ]$${e}[0m /" & \
+	go run ./cmd/identity      2>&1 | sed "s/^/$${e}[92m[identity     ]$${e}[0m /" & \
+	wait
 
 # ── Run individual services ───────────────────────────────────────────────────
 run-betacceptance:

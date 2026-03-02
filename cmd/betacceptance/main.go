@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	sbv1 "github.com/sportsbook/sb/gen/sportsbook/v1"
 	"github.com/sportsbook/sb/internal/betacceptance"
+	"github.com/sportsbook/sb/internal/identity"
 )
 
 func main() {
@@ -37,7 +39,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	cfg := betacceptance.DefaultConfig()
 
 	// ── DB (PgBouncer transaction mode) ──────────────────────────────────────
-	dbURL := envOr("BET_ACCEPTANCE_DB_URL", "postgres://sb:sb_secret@localhost:6432/db_bet_acceptance")
+	dbURL := envOr("BET_ACCEPTANCE_DB_URL", "postgres://sb:sb_secret@localhost:6432/db_bet_acceptance?sslmode=disable&default_query_exec_mode=simple_protocol")
 	db, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		return fmt.Errorf("db pool: %w", err)
@@ -84,8 +86,11 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	go relay.Run(ctx)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
+	jwtSecret := []byte(envOr("JWT_SECRET", "dev-secret-change-in-production"))
+	identitySvc := identity.NewService(nil, nil, jwtSecret, logger)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /bets", makePlaceBetHandler(betFlow, logger))
+	mux.Handle("POST /bets", jwtMiddleware(identitySvc, makePlaceBetHandler(betFlow, logger)))
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -195,6 +200,23 @@ func mapBetFlowError(err error) httpError {
 	default:
 		return httpError{code: http.StatusInternalServerError, Error: "INTERNAL_ERROR"}
 	}
+}
+
+func jwtMiddleware(svc *identity.Service, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
+			return
+		}
+		claims, err := svc.ValidateToken(strings.TrimPrefix(auth, "Bearer "))
+		if err != nil {
+			http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+			return
+		}
+		r.Header.Set("X-User-ID", claims.UserID)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func envOr(key, fallback string) string {

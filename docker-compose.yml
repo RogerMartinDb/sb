@@ -9,12 +9,12 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: EXTERNAL://0.0.0.0:9092,INTERNAL://0.0.0.0:29092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -23,7 +23,7 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -36,15 +36,15 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data.raw           --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data.normalised    --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic odds.updated              --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic odds.suspended            --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.placed                --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.settled               --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.voided                --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.recorded              --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic wallet.transaction        --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data.raw           --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data.normalised    --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds.updated              --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds.suspended            --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.placed                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.settled               --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.voided                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.recorded              --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic wallet.transaction        --partitions 24 --replication-factor 1
 
   # ── PostgreSQL databases ───────────────────────────────────────────────────
   db-bet-acceptance:
@@ -54,6 +54,7 @@ services:
       POSTGRES_DB: db_bet_acceptance
       POSTGRES_USER: sb
       POSTGRES_PASSWORD: sb_secret
+      POSTGRES_HOST_AUTH_METHOD: md5
     ports:
       - "15432:5432"
     volumes:
@@ -164,7 +165,7 @@ services:
     image: edoburu/pgbouncer:v1.23.1-p3
     container_name: sb-pgbouncer
     ports:
-      - "6432:6432"
+      - "6432:5432"
     environment:
       DB_HOST: db-bet-acceptance
       DB_PORT: 5432
