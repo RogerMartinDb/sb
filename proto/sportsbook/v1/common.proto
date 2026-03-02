@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package sportsbook.v1;
+
+option go_package = "github.com/sportsbook/sb/gen/sportsbook/v1;sbv1";
+
+// Money represents a decimal amount with explicit currency.
+message Money {
+  // Amount in minor units (e.g. cents). Divide by 100 for display.
+  int64  amount_minor = 1;
+  string currency     = 2; // ISO 4217, e.g. "GBP"
+}
+
+// Odds represent fractional / decimal odds in a canonical decimal form.
+// Stored as numerator/denominator to avoid floating-point errors.
+message Odds {
+  int64 numerator   = 1;
+  int64 denominator = 2;
+}
+
+// KYCStatus mirrors the Identity service enum so callers don't need to
+// import the identity proto.
+enum KYCStatus {
+  KYC_STATUS_UNSPECIFIED = 0;
+  KYC_STATUS_PENDING     = 1;
+  KYC_STATUS_VERIFIED    = 2;
+  KYC_STATUS_REJECTED    = 3;
+}

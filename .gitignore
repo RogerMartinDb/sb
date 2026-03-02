@@ -1,0 +1,34 @@
+# Binaries
+bin/
+dist/
+
+# Go
+*.test
+*.out
+vendor/
+
+# Generated protobuf code
+gen/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes / data
+*.pid

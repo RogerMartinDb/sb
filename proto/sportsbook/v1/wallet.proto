@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package sportsbook.v1;
+
+option go_package = "github.com/sportsbook/sb/gen/sportsbook/v1;sbv1";
+
+import "sportsbook/v1/common.proto";
+
+// WalletService is called synchronously (gRPC) by the Bet Acceptance Service
+// on the critical bet-placement path.
+service WalletService {
+  // GetUserLimits returns stake limits and daily usage for a user.
+  // Called before balance deduction to enforce responsible-gambling controls.
+  rpc GetUserLimits(GetUserLimitsRequest) returns (GetUserLimitsResponse);
+
+  // DeductBalance reserves stake for a pending bet.
+  // Writes a double-entry ledger row: debit available_balance, credit bets_in_flight.
+  // Idempotent on transaction_id.
+  rpc DeductBalance(DeductBalanceRequest) returns (DeductBalanceResponse);
+
+  // CreditBalance settles a bet by crediting winnings or refunding a voided stake.
+  // Called by the Settlement Service asynchronously.
+  rpc CreditBalance(CreditBalanceRequest) returns (CreditBalanceResponse);
+
+  // ConfirmTransaction moves a ledger row from PENDING_CONFIRMATION → CONFIRMED.
+  // Called by Bet History Service after recording bet.placed.
+  rpc ConfirmTransaction(ConfirmTransactionRequest) returns (ConfirmTransactionResponse);
+
+  // GetBalance returns the current available balance for a user.
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+}
+
+// ── GetUserLimits ─────────────────────────────────────────────────────────────
+
+message GetUserLimitsRequest {
+  string user_id = 1;
+}
+
+message GetUserLimitsResponse {
+  Money  max_single_stake     = 1; // Maximum stake per bet
+  Money  daily_limit          = 2; // Total stake limit per rolling 24h window
+  Money  daily_staked_so_far  = 3; // Amount already staked in this window
+  KYCStatus kyc_status        = 4;
+}
+
+// ── DeductBalance ─────────────────────────────────────────────────────────────
+
+message DeductBalanceRequest {
+  string transaction_id = 1; // Idempotency key — ties to bet_id in Bet Acceptance DB
+  string user_id        = 2;
+  Money  stake          = 3;
+  string bet_id         = 4; // Reference to the Bet Acceptance outbox row
+}
+
+message DeductBalanceResponse {
+  string            transaction_id  = 1;
+  LedgerEntryStatus status          = 2;
+  Money             available_after = 3; // Remaining available balance post-deduction
+}
+
+// ── CreditBalance ─────────────────────────────────────────────────────────────
+
+message CreditBalanceRequest {
+  string              transaction_id    = 1; // Idempotency key
+  string              user_id           = 2;
+  Money               amount            = 3; // Winnings or refund amount
+  CreditReason        reason            = 4;
+  string              originating_bet_id = 5;
+}
+
+message CreditBalanceResponse {
+  string            transaction_id  = 1;
+  LedgerEntryStatus status          = 2;
+  Money             available_after = 3;
+}
+
+enum CreditReason {
+  CREDIT_REASON_UNSPECIFIED = 0;
+  CREDIT_REASON_WIN         = 1; // Bet won — credit net winnings
+  CREDIT_REASON_VOID        = 2; // Bet voided — refund stake
+  CREDIT_REASON_PUSH        = 3; // Pushed — refund stake
+}
+
+// ── ConfirmTransaction ────────────────────────────────────────────────────────
+
+message ConfirmTransactionRequest {
+  string transaction_id = 1;
+}
+
+message ConfirmTransactionResponse {
+  string            transaction_id = 1;
+  LedgerEntryStatus status         = 2;
+}
+
+// ── GetBalance ────────────────────────────────────────────────────────────────
+
+message GetBalanceRequest {
+  string user_id = 1;
+}
+
+message GetBalanceResponse {
+  string user_id         = 1;
+  Money  available       = 2;
+  Money  bets_in_flight  = 3; // Reserved stake for unsettled bets
+  Money  total           = 4; // available + bets_in_flight
+}
+
+// ── Shared enums ──────────────────────────────────────────────────────────────
+
+enum LedgerEntryStatus {
+  LEDGER_ENTRY_STATUS_UNSPECIFIED         = 0;
+  LEDGER_ENTRY_STATUS_PENDING_CONFIRMATION = 1; // Deducted; awaiting bet.recorded confirmation
+  LEDGER_ENTRY_STATUS_CONFIRMED           = 2; // bet.recorded consumed; fully confirmed
+  LEDGER_ENTRY_STATUS_CANCELLED           = 3; // Bet rejected after deduction; funds returned
+}

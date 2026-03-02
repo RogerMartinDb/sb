@@ -1,0 +1,230 @@
+services:
+  # ── Kafka (KRaft mode, single node for dev) ────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.9.0
+    container_name: sb-kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data.raw           --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic market-data.normalised    --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic odds.updated              --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic odds.suspended            --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.placed                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.settled               --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.voided                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic bet.recorded              --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic wallet.transaction        --partitions 24 --replication-factor 1
+
+  # ── PostgreSQL databases ───────────────────────────────────────────────────
+  db-bet-acceptance:
+    image: postgres:17
+    container_name: sb-db-bet-acceptance
+    environment:
+      POSTGRES_DB: db_bet_acceptance
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "15432:5432"
+    volumes:
+      - db-bet-acceptance-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_bet_acceptance"]
+      interval: 5s
+      retries: 10
+
+  db-wallet:
+    image: postgres:17
+    container_name: sb-db-wallet
+    environment:
+      POSTGRES_DB: db_wallet
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-wallet-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_wallet"]
+      interval: 5s
+      retries: 10
+
+  db-odds:
+    image: postgres:17
+    container_name: sb-db-odds
+    environment:
+      POSTGRES_DB: db_odds
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5434:5432"
+    volumes:
+      - db-odds-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_odds"]
+      interval: 5s
+      retries: 10
+
+  db-catalog:
+    image: postgres:17
+    container_name: sb-db-catalog
+    environment:
+      POSTGRES_DB: db_catalog
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5435:5432"
+    volumes:
+      - db-catalog-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_catalog"]
+      interval: 5s
+      retries: 10
+
+  db-bet-history:
+    image: postgres:17
+    container_name: sb-db-bet-history
+    environment:
+      POSTGRES_DB: db_bet_history
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5436:5432"
+    volumes:
+      - db-bet-history-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_bet_history"]
+      interval: 5s
+      retries: 10
+
+  db-settlement:
+    image: postgres:17
+    container_name: sb-db-settlement
+    environment:
+      POSTGRES_DB: db_settlement
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5437:5432"
+    volumes:
+      - db-settlement-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_settlement"]
+      interval: 5s
+      retries: 10
+
+  db-identity:
+    image: postgres:17
+    container_name: sb-db-identity
+    environment:
+      POSTGRES_DB: db_identity
+      POSTGRES_USER: sb
+      POSTGRES_PASSWORD: sb_secret
+    ports:
+      - "5438:5432"
+    volumes:
+      - db-identity-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sb -d db_identity"]
+      interval: 5s
+      retries: 10
+
+  # ── PgBouncer (shared, routes by db name) ─────────────────────────────────
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.23.1-p3
+    container_name: sb-pgbouncer
+    ports:
+      - "6432:6432"
+    environment:
+      DB_HOST: db-bet-acceptance
+      DB_PORT: 5432
+      DB_NAME: db_bet_acceptance
+      DB_USER: sb
+      DB_PASSWORD: sb_secret
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+    depends_on:
+      db-bet-acceptance:
+        condition: service_healthy
+
+  # ── Redis instances (4 logical concerns) ──────────────────────────────────
+  redis-session:
+    image: redis:7.4-alpine
+    container_name: sb-redis-session
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-session-data:/data
+
+  redis-odds:
+    image: redis:7.4-alpine
+    container_name: sb-redis-odds
+    ports:
+      - "6380:6379"
+    command: redis-server --maxmemory 512mb --maxmemory-policy volatile-ttl
+    volumes:
+      - redis-odds-data:/data
+
+  redis-market-status:
+    image: redis:7.4-alpine
+    container_name: sb-redis-market-status
+    ports:
+      - "6381:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-ttl
+    volumes:
+      - redis-market-status-data:/data
+
+  redis-ratelimit:
+    image: redis:7.4-alpine
+    container_name: sb-redis-ratelimit
+    ports:
+      - "6382:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-ratelimit-data:/data
+
+volumes:
+  kafka-data:
+  db-bet-acceptance-data:
+  db-wallet-data:
+  db-odds-data:
+  db-catalog-data:
+  db-bet-history-data:
+  db-settlement-data:
+  db-identity-data:
+  redis-session-data:
+  redis-odds-data:
+  redis-market-status-data:
+  redis-ratelimit-data:
