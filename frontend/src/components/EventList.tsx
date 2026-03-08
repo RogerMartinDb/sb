@@ -22,21 +22,34 @@ function formatLine(sel: Selection, market: Market): string {
   switch (market.market_type) {
     case 'SPREAD': {
       const sign = sel.target_value > 0 ? '+' : ''
-      return `${sel.name} ${sign}${sel.target_value}`
+      return `${sign}${sel.target_value}`
     }
-    case 'TOTAL': {
-      const label = sel.target_value > 0 ? 'Over' : 'Under'
-      return `${label} ${Math.abs(sel.target_value)}`
-    }
+    case 'TOTAL':
+      return sel.target_value > 0 ? `O ${Math.abs(sel.target_value)}` : `U ${Math.abs(sel.target_value)}`
     default:
-      return sel.name
+      return ''
   }
+}
+
+const C = {
+  bg:            '#07152b',
+  card:          '#0d1f3c',
+  cardHeader:    '#091729',
+  border:        '#1c3354',
+  gold:          '#f5c518',
+  text:          '#e2e8f0',
+  muted:         '#6b849e',
+  btnBg:         '#142a4a',
+  btnBorder:     '#1e3a5f',
+  btnOdds:       '#5dade2',
+  selBg:         '#f5c518',
+  selText:       '#071222',
 }
 
 export default function EventList({ onSelectBet }: Props) {
   const [events, setEvents] = useState<Event[]>([])
-  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -51,110 +64,170 @@ export default function EventList({ onSelectBet }: Props) {
     return () => { active = false; clearInterval(interval) }
   }, [])
 
-  function toggleExpand(eventId: string) {
-    setExpandedEvents(prev => {
-      const next = new Set(prev)
-      if (next.has(eventId)) next.delete(eventId)
-      else next.add(eventId)
-      return next
-    })
-  }
+  if (loading) return <p style={{ color: C.muted, padding: 12 }}>Loading events…</p>
+  if (events.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
 
-  function handleSelect(market: Market, sel: Selection) {
-    if (sel.odds_decimal <= 0) return
-    onSelectBet({
-      market_id: market.market_id,
-      market_name: market.name,
-      selection_id: sel.selection_id,
-      selection_name: formatLine(sel, market),
-      odds_decimal: sel.odds_decimal,
-      odds_american: sel.odds_american,
-    })
-  }
-
-  if (loading) return <p>Loading events...</p>
-  if (events.length === 0) return <p>No upcoming events.</p>
+  const COLS: { label: string; type: string }[] = [
+    { label: 'Spread', type: 'SPREAD' },
+    { label: 'Moneyline',     type: 'ML' },
+    { label: 'Total',  type: 'TOTAL' },
+  ]
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {events.map(ev => {
         const mainMarkets = ev.markets.filter(m => m.is_main)
-        const altMarkets = ev.markets.filter(m => !m.is_main)
-        const expanded = expandedEvents.has(ev.event_id)
+        const byType = Object.fromEntries(
+          COLS.map(c => [c.type, mainMarkets.find((m: Market) => m.market_type === c.type)])
+        )
+
+        // derive team rows from whichever main market has the most selections
+        const baseMarket = byType['ML'] ?? byType['SPREAD'] ?? mainMarkets[0]
+        if (!baseMarket) return null
+        const rows: Selection[] = baseMarket.selections
+
+        // active columns (only those with data)
+        const activeCols = COLS.filter(c => byType[c.type])
+
+        const gridCols = `1fr ${activeCols.map(() => '96px').join(' ')}`
 
         return (
-          <div key={ev.event_id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div>
-                <strong>{ev.name}</strong>
-                <div style={{ fontSize: 12, color: '#888' }}>
-                  {new Date(ev.starts_at).toLocaleString()}
-                </div>
-              </div>
+          <div key={ev.event_id} style={{
+            background: C.card,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            overflow: 'hidden',
+            fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+          }}>
+            {/* Event header */}
+            <div style={{
+              background: C.cardHeader,
+              padding: '8px 14px',
+              borderBottom: `1px solid ${C.border}`,
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
+              <span style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>
+                {new Date(ev.starts_at).toLocaleString(undefined, {
+                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
             </div>
 
-            {mainMarkets.map(m => (
-              <MarketRow key={m.market_id} market={m} onSelect={sel => handleSelect(m, sel)} />
-            ))}
+            {/* Column headers */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: gridCols,
+              borderBottom: `1px solid ${C.border}`,
+              background: C.cardHeader,
+            }}>
+              <div />
+              {activeCols.map(col => (
+                <div key={col.label} style={{
+                  textAlign: 'center',
+                  padding: '5px 4px',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  color: C.gold,
+                  borderLeft: `1px solid ${C.border}`,
+                }}>
+                  {col.label}
+                </div>
+              ))}
+            </div>
 
-            {altMarkets.length > 0 && (
-              <button
-                onClick={() => toggleExpand(ev.event_id)}
-                style={{
-                  background: 'none', border: 'none', color: '#1976d2',
-                  cursor: 'pointer', fontSize: 13, padding: '4px 0', marginTop: 4,
-                }}
-              >
-                {expanded ? 'Hide Alt Lines' : `Show All Lines (${altMarkets.length})`}
-              </button>
-            )}
+            {/* One row per team/selection */}
+            {rows.map((teamSel, i) => (
+              <div key={teamSel.selection_id} style={{
+                display: 'grid',
+                gridTemplateColumns: gridCols,
+                borderBottom: i < rows.length - 1 ? `1px solid ${C.border}` : 'none',
+                alignItems: 'center',
+              }}>
+                {/* Team name */}
+                <div style={{
+                  padding: '10px 14px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: C.text,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {teamSel.name}
+                </div>
 
-            {expanded && altMarkets.map(m => (
-              <MarketRow key={m.market_id} market={m} onSelect={sel => handleSelect(m, sel)} />
+                {/* Odds button per column */}
+                {activeCols.map(col => {
+                  const market = byType[col.type]!
+                  const sel = market.selections[i]
+                  const disabled = !sel || sel.odds_decimal <= 0
+                  const active = sel && selectedId === sel.selection_id
+
+                  return (
+                    <div key={col.label} style={{
+                      borderLeft: `1px solid ${C.border}`,
+                      padding: '6px 7px',
+                    }}>
+                      <button
+                        disabled={disabled}
+                        onClick={() => {
+                          if (!sel) return
+                          setSelectedId(sel.selection_id)
+                          onSelectBet({
+                            market_id: market.market_id,
+                            market_name: market.name,
+                            selection_id: sel.selection_id,
+                            selection_name: formatLine(sel, market) || sel.name,
+                            odds_decimal: sel.odds_decimal,
+                            odds_american: sel.odds_american,
+                          })
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '7px 2px',
+                          border: active
+                            ? `1.5px solid ${C.gold}`
+                            : `1px solid ${disabled ? 'transparent' : C.btnBorder}`,
+                          borderRadius: 6,
+                          background: active ? C.selBg : (disabled ? 'transparent' : C.btnBg),
+                          cursor: disabled ? 'default' : 'pointer',
+                          textAlign: 'center',
+                          transition: 'background 0.15s',
+                        }}
+                      >
+                        {!disabled ? (
+                          <>
+                            {col.type !== 'ML' && (
+                              <div style={{
+                                fontSize: 10,
+                                color: active ? C.selText : C.muted,
+                                marginBottom: 1,
+                                fontWeight: 600,
+                              }}>
+                                {formatLine(sel, market)}
+                              </div>
+                            )}
+                            <div style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: active ? C.selText : C.btnOdds,
+                            }}>
+                              {formatAmerican(sel.odds_american)}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ fontSize: 13, color: C.border }}>—</div>
+                        )}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             ))}
           </div>
         )
       })}
-    </div>
-  )
-}
-
-function MarketRow({ market, onSelect }: { market: Market; onSelect: (sel: Selection) => void }) {
-  const typeLabel = market.market_type === 'ML' ? 'Moneyline'
-    : market.market_type === 'SPREAD' ? 'Spread'
-    : market.market_type === 'TOTAL' ? 'Total'
-    : market.market_type
-
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
-        {typeLabel}{market.target_value > 0 && market.market_type !== 'ML' ? ` ${market.target_value}` : ''}
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {market.selections.map(sel => (
-          <button
-            key={sel.selection_id}
-            onClick={() => onSelect(sel)}
-            disabled={sel.odds_decimal <= 0}
-            style={{
-              padding: '6px 10px',
-              border: '1px solid #ccc',
-              borderRadius: 4,
-              background: sel.odds_decimal > 0 ? '#fff' : '#f5f5f5',
-              cursor: sel.odds_decimal > 0 ? 'pointer' : 'default',
-              fontSize: 13,
-              minWidth: 100,
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontWeight: 500 }}>{formatLine(sel, market)}</div>
-            {sel.odds_decimal > 0
-              ? <div style={{ color: '#1976d2', fontWeight: 600 }}>{formatAmerican(sel.odds_american)}</div>
-              : <div style={{ color: '#999' }}>N/A</div>
-            }
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
