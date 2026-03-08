@@ -67,6 +67,7 @@ export default function EventList({ onSelectBet }: Props) {
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [altOpen, setAltOpen] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     let active = true
@@ -164,6 +165,11 @@ export default function EventList({ onSelectBet }: Props) {
 
         const gridCols = `1fr ${activeCols.map(() => '96px').join(' ')}`
 
+        const altSpreads = ev.markets.filter(m => !m.is_main && m.market_type === 'SPREAD')
+        const altTotals  = ev.markets.filter(m => !m.is_main && m.market_type === 'TOTAL')
+        const hasAlts    = altSpreads.length > 0 || altTotals.length > 0
+        const showAlts   = altOpen[ev.event_id] ?? false
+
         return (
           <div key={ev.event_id} style={{
             background: C.card,
@@ -177,13 +183,37 @@ export default function EventList({ onSelectBet }: Props) {
               background: C.cardHeader,
               padding: '8px 14px',
               borderBottom: `1px solid ${C.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
-              <span style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>
-                {new Date(ev.starts_at).toLocaleTimeString(undefined, {
-                  hour: '2-digit', minute: '2-digit',
-                })}
-              </span>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
+                <span style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>
+                  {new Date(ev.starts_at).toLocaleTimeString(undefined, {
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              </div>
+              {hasAlts && (
+                <button
+                  onClick={() => setAltOpen(prev => ({ ...prev, [ev.event_id]: !showAlts }))}
+                  style={{
+                    background: showAlts ? C.btnBg : 'transparent',
+                    border: `1px solid ${showAlts ? C.btnOdds : C.border}`,
+                    borderRadius: 4,
+                    color: showAlts ? C.btnOdds : C.muted,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ALT LINES {showAlts ? '▲' : '▼'}
+                </button>
+              )}
             </div>
 
             {/* Column headers */}
@@ -298,6 +328,97 @@ export default function EventList({ onSelectBet }: Props) {
                 })}
               </div>
             ))}
+
+            {/* Alt lines panel */}
+            {showAlts && (altSpreads.length > 0 || altTotals.length > 0) && (
+              <div style={{ borderTop: `1px solid ${C.border}`, background: C.bg }}>
+                {[
+                  { label: 'ALT SPREADS', markets: altSpreads },
+                  { label: 'ALT TOTALS',  markets: altTotals  },
+                ].filter(g => g.markets.length > 0).map(group => (
+                  <div key={group.label}>
+                    <div style={{
+                      padding: '5px 14px',
+                      fontSize: 10,
+                      fontWeight: 800,
+                      letterSpacing: '0.1em',
+                      color: C.gold,
+                      borderBottom: `1px solid ${C.border}`,
+                      background: C.cardHeader,
+                    }}>
+                      {group.label}
+                    </div>
+                    {group.markets.map(altMarket => (
+                      altMarket.selections.map((sel, si) => {
+                        const disabled = sel.odds_decimal <= 0
+                        const active = selectedId === sel.selection_id
+                        return (
+                          <div key={sel.selection_id} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 96px',
+                            borderBottom: `1px solid ${C.border}`,
+                            alignItems: 'center',
+                          }}>
+                            <div style={{
+                              padding: '8px 14px',
+                              fontSize: 12,
+                              color: C.muted,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}>
+                              {rows[si]?.name ?? sel.name}
+                            </div>
+                            <div style={{ borderLeft: `1px solid ${C.border}`, padding: '5px 7px' }}>
+                              <button
+                                disabled={disabled}
+                                onClick={() => {
+                                  if (disabled) return
+                                  setSelectedId(sel.selection_id)
+                                  onSelectBet({
+                                    market_id: altMarket.market_id,
+                                    market_name: altMarket.name,
+                                    selection_id: sel.selection_id,
+                                    selection_name: formatLine(sel, altMarket) || sel.name,
+                                    odds_decimal: sel.odds_decimal,
+                                    odds_american: sel.odds_american,
+                                  })
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 2px',
+                                  border: active
+                                    ? `1.5px solid ${C.gold}`
+                                    : `1px solid ${disabled ? 'transparent' : C.btnBorder}`,
+                                  borderRadius: 6,
+                                  background: active ? C.selBg : (disabled ? 'transparent' : C.btnBg),
+                                  cursor: disabled ? 'default' : 'pointer',
+                                  textAlign: 'center',
+                                  transition: 'background 0.15s',
+                                }}
+                              >
+                                {!disabled ? (
+                                  <>
+                                    <div style={{ fontSize: 10, color: active ? C.selText : C.muted, marginBottom: 1, fontWeight: 600 }}>
+                                      {formatLine(sel, altMarket)}
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: active ? C.selText : C.btnOdds }}>
+                                      {formatAmerican(sel.odds_american)}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div style={{ fontSize: 13, color: C.border }}>—</div>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
