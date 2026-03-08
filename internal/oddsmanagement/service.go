@@ -55,6 +55,7 @@ func NewService(db *pgxpool.Pool, catalogDB *pgxpool.Pool, brokers []string, log
 	if err != nil {
 		return nil, fmt.Errorf("odds: create producer: %w", err)
 	}
+	logger.Info("odds management: producer connected", "brokers", brokers)
 	return &Service{db: db, catalogDB: catalogDB, producer: producer, logger: logger}, nil
 }
 
@@ -77,6 +78,8 @@ func (s *Service) RunConsumer(ctx context.Context, brokers []string) error {
 
 	topics := []string{"market-data.normalised", "bet.placed"}
 	handler := &oddsHandler{svc: s}
+
+	s.logger.Info("odds management: consumer started", "group", OddsManagementConsumerGroup, "topics", topics)
 
 	for {
 		if err := cg.Consume(ctx, topics, handler); err != nil {

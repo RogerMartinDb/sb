@@ -77,11 +77,13 @@ func NewCacheUpdater(brokers []string, rdb *redis.Client, logger *slog.Logger) (
 	if err != nil {
 		return nil, fmt.Errorf("cache_updater: create consumer group: %w", err)
 	}
+	logger.Info("odds cache updater: consumer group created", "group", ConsumerGroupOdds, "brokers", brokers)
 	return &CacheUpdater{consumer: cg, rdb: rdb, logger: logger}, nil
 }
 
 // Run starts consuming odds.updated events until ctx is cancelled.
 func (u *CacheUpdater) Run(ctx context.Context) error {
+	u.logger.Info("odds cache updater: started", "topic", TopicOddsUpdated)
 	handler := &cacheUpdaterHandler{rdb: u.rdb, logger: u.logger}
 	for {
 		if err := u.consumer.Consume(ctx, []string{TopicOddsUpdated}, handler); err != nil {
