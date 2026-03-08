@@ -83,15 +83,15 @@ func NewClient(logger *slog.Logger) *Client {
 	}
 }
 
-// FetchNBAEvents returns active, non-closed NBA events from Polymarket
-// using the /events endpoint with tag_slug=nba.
+// FetchNBAEvents returns active, non-closed NBA game events from Polymarket.
+// Uses tag_id=745 (NBA) with related_tags=true to discover game-level events.
 func (c *Client) FetchNBAEvents(ctx context.Context) ([]Event, error) {
 	var all []Event
 	offset := 0
 	const limit = 100
 
 	for {
-		url := fmt.Sprintf("%s/events?active=true&closed=false&tag_slug=nba&limit=%d&offset=%d",
+		url := fmt.Sprintf("%s/events?tag_id=745&related_tags=true&active=true&closed=false&order=startDate&ascending=false&limit=%d&offset=%d",
 			c.baseURL, limit, offset)
 
 		c.logger.Debug("polymarket: fetching events", "url", url)

@@ -31,6 +31,10 @@ export interface Event {
   name: string
   starts_at: string
   status: string
+  home_score: number
+  away_score: number
+  game_period: string
+  game_clock: string
   markets: Market[]
 }
 

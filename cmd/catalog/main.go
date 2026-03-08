@@ -75,6 +75,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	// Run Polymarket syncer in background (with Kafka producer).
 	go polymarket.NewSyncer(db, producer, logger).Run(ctx)
 
+	// Run NBA live score updater in background.
+	go polymarket.NewScoreUpdater(db, logger).Run(ctx)
+
 	// Run status cache warmer in background.
 	go catalog.NewStatusCacheWarmer(db, redisMarket, logger).Run(ctx)
 

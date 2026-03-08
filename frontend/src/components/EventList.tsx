@@ -44,6 +44,8 @@ const C = {
   btnOdds:       '#5dade2',
   selBg:         '#f5c518',
   selText:       '#071222',
+  live:          '#e74c3c',
+  liveGlow:      'rgba(231, 76, 60, 0.25)',
 }
 
 function dateKey(iso: string): string {
@@ -82,6 +84,17 @@ export default function EventList({ onSelectBet }: Props) {
     return () => { active = false; clearInterval(interval) }
   }, [])
 
+  useEffect(() => {
+    // Inject pulse animation for live indicator.
+    const id = 'live-pulse-keyframes'
+    if (!document.getElementById(id)) {
+      const style = document.createElement('style')
+      style.id = id
+      style.textContent = `@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`
+      document.head.appendChild(style)
+    }
+  }, [])
+
   if (loading) return <p style={{ color: C.muted, padding: 12 }}>Loading events…</p>
   if (events.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
 
@@ -91,25 +104,32 @@ export default function EventList({ onSelectBet }: Props) {
     { label: 'Total',  type: 'TOTAL' },
   ]
 
-  // Group events by local calendar date, preserving sort order.
-  const groups: { key: string; evs: Event[] }[] = []
-  for (const ev of events) {
+  // Separate live games from scheduled, then group scheduled by date.
+  const liveEvents = events.filter(ev => ev.status === 'LIVE')
+  const scheduledEvents = events.filter(ev => ev.status !== 'LIVE')
+
+  const groups: { key: string; label: string; evs: Event[] }[] = []
+  if (liveEvents.length > 0) {
+    groups.push({ key: '_live', label: 'LIVE', evs: liveEvents })
+  }
+  for (const ev of scheduledEvents) {
     const k = dateKey(ev.starts_at)
     const last = groups[groups.length - 1]
     if (last && last.key === k) {
       last.evs.push(ev)
     } else {
-      groups.push({ key: k, evs: [ev] })
+      groups.push({ key: k, label: dateLabel(k), evs: [ev] })
     }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {groups.map(({ key, evs }) => {
+      {groups.map(({ key, label, evs }) => {
         const isCollapsed = collapsed[key] ?? false
+        const isLiveGroup = key === '_live'
         return (
         <div key={key}>
-          {/* Date section header */}
+          {/* Section header */}
           <button
             onClick={() => setCollapsed(prev => ({ ...prev, [key]: !isCollapsed }))}
             style={{
@@ -124,14 +144,25 @@ export default function EventList({ onSelectBet }: Props) {
               textAlign: 'left',
             }}
           >
+            {isLiveGroup && (
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: C.live,
+                boxShadow: `0 0 6px ${C.live}`,
+                flexShrink: 0,
+                animation: 'pulse 2s ease-in-out infinite',
+              }} />
+            )}
             <span style={{
               fontSize: 13,
               fontWeight: 800,
               letterSpacing: '0.1em',
-              color: C.text,
+              color: isLiveGroup ? C.live : C.text,
               flexShrink: 0,
             }}>
-              {dateLabel(key)}
+              {label}
             </span>
             <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>
               {evs.length} {evs.length === 1 ? 'game' : 'games'}
@@ -180,20 +211,38 @@ export default function EventList({ onSelectBet }: Props) {
           }}>
             {/* Event header */}
             <div style={{
-              background: C.cardHeader,
+              background: ev.status === 'LIVE' ? `linear-gradient(135deg, ${C.cardHeader}, ${C.liveGlow})` : C.cardHeader,
               padding: '8px 14px',
-              borderBottom: `1px solid ${C.border}`,
+              borderBottom: `1px solid ${ev.status === 'LIVE' ? C.live + '44' : C.border}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
             }}>
-              <div>
-                <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
-                <span style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>
-                  {new Date(ev.starts_at).toLocaleTimeString(undefined, {
-                    hour: '2-digit', minute: '2-digit',
-                  })}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                {ev.status === 'LIVE' && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    letterSpacing: '0.05em',
+                    color: '#fff',
+                    background: C.live,
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    flexShrink: 0,
+                  }}>LIVE</span>
+                )}
+                <span style={{ fontWeight: 700, fontSize: 13, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.name}</span>
+                {ev.status === 'LIVE' && ev.game_period ? (
+                  <span style={{ fontSize: 11, color: C.live, flexShrink: 0, fontWeight: 600 }}>
+                    {ev.game_period}{ev.game_clock ? ` ${ev.game_clock}` : ''}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>
+                    {new Date(ev.starts_at).toLocaleTimeString(undefined, {
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
+                )}
               </div>
               {hasAlts && (
                 <button
@@ -247,17 +296,35 @@ export default function EventList({ onSelectBet }: Props) {
                 borderBottom: i < rows.length - 1 ? `1px solid ${C.border}` : 'none',
                 alignItems: 'center',
               }}>
-                {/* Team name */}
+                {/* Team name + score */}
                 <div style={{
                   padding: '10px 14px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: C.text,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
                 }}>
-                  {teamSel.name}
+                  <span style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: C.text,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {teamSel.name}
+                  </span>
+                  {ev.status === 'LIVE' && (
+                    <span style={{
+                      fontSize: 15,
+                      fontWeight: 800,
+                      color: C.text,
+                      fontVariantNumeric: 'tabular-nums',
+                      flexShrink: 0,
+                    }}>
+                      {i === 0 ? ev.away_score : ev.home_score}
+                    </span>
+                  )}
                 </div>
 
                 {/* Odds button per column */}

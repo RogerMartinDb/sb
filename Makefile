@@ -87,6 +87,7 @@ migrate-odds:
 migrate-catalog:
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/001_init.sql
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/002_polymarket.sql
+	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/003_live_game.sql
 
 truncate-events:
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -c "TRUNCATE events CASCADE;"

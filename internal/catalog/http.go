@@ -36,6 +36,10 @@ type eventResp struct {
 	Name          string       `json:"name"`
 	StartsAt      string       `json:"starts_at"`
 	Status        string       `json:"status"`
+	HomeScore     int          `json:"home_score"`
+	AwayScore     int          `json:"away_score"`
+	GamePeriod    string       `json:"game_period"`
+	GameClock     string       `json:"game_clock"`
 	Markets       []marketResp `json:"markets"`
 }
 
@@ -65,6 +69,7 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(ctx, `
 		SELECT
 			e.event_id, e.competition_id, e.name, e.starts_at::text, e.status,
+			e.home_score, e.away_score, e.game_period, e.game_clock,
 			m.market_id, m.name, m.status, m.market_type, m.target_value, m.is_main,
 			s.selection_id, s.name, s.target_value
 		FROM events e
@@ -73,7 +78,9 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 		WHERE e.status IN ('SCHEDULED', 'LIVE')
 		  AND m.status = 'OPEN'
 		  AND s.active = true
-		ORDER BY e.starts_at, e.event_id, m.is_main DESC, m.market_type, m.target_value, s.selection_id`)
+		ORDER BY
+		    CASE e.status WHEN 'LIVE' THEN 0 ELSE 1 END,
+		    e.starts_at, e.event_id, m.is_main DESC, m.market_type, m.target_value, s.selection_id`)
 	if err != nil {
 		h.logger.Error("http: query events failed", "err", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -91,6 +98,8 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var (
 			eID, eCompID, eName, eStartsAt, eStatus string
+			eHomeScore, eAwayScore                  int
+			eGamePeriod, eGameClock                 string
 			mID, mName, mStatus, mType              string
 			sID, sName                              string
 			mTargetValue, sTargetValue              float64
@@ -98,6 +107,7 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 		)
 		if err := rows.Scan(
 			&eID, &eCompID, &eName, &eStartsAt, &eStatus,
+			&eHomeScore, &eAwayScore, &eGamePeriod, &eGameClock,
 			&mID, &mName, &mStatus, &mType, &mTargetValue, &mIsMain,
 			&sID, &sName, &sTargetValue,
 		); err != nil {
@@ -112,6 +122,10 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 				Name:          eName,
 				StartsAt:      eStartsAt,
 				Status:        eStatus,
+				HomeScore:     eHomeScore,
+				AwayScore:     eAwayScore,
+				GamePeriod:    eGamePeriod,
+				GameClock:     eGameClock,
 			}
 			eventOrder = append(eventOrder, eID)
 		}

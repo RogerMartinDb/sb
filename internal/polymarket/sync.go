@@ -143,26 +143,35 @@ func (s *Syncer) syncEvent(ctx context.Context, ev Event, now, cutoff time.Time)
 		s.logger.Warn("polymarket: no game start time found", "slug", ev.Slug)
 		return nil
 	}
-	if !startTime.After(now) || startTime.After(cutoff) {
+	// Allow live games (started up to 6 hours ago) and future games within the look-ahead window.
+	liveWindow := now.Add(-6 * time.Hour)
+	if startTime.Before(liveWindow) || startTime.After(cutoff) {
 		s.logger.Debug("polymarket: event outside time window",
 			"slug", ev.Slug, "starts_at", startTime,
 			"now", now, "cutoff", cutoff)
 		return nil
 	}
 
+	// Determine event status: LIVE if game has started, SCHEDULED otherwise.
+	eventStatus := "SCHEDULED"
+	if !startTime.After(now) {
+		eventStatus = "LIVE"
+	}
+
 	s.logger.Info("polymarket: syncing event",
 		"slug", ev.Slug, "title", ev.Title, "starts_at", startTime,
-		"total_markets", len(ev.Markets))
+		"status", eventStatus, "total_markets", len(ev.Markets))
 
 	eventName := strings.ReplaceAll(ev.Title, " vs. ", " @ ")
 	if _, err := s.db.Exec(ctx, `
 		INSERT INTO events (event_id, competition_id, name, starts_at, status)
-		VALUES ($1, $2, $3, $4, 'SCHEDULED')
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (event_id) DO UPDATE
 		    SET name       = EXCLUDED.name,
 		        starts_at  = EXCLUDED.starts_at,
+		        status     = EXCLUDED.status,
 		        updated_at = NOW()`,
-		ev.ID, competitionID, eventName, startTime,
+		ev.ID, competitionID, eventName, startTime, eventStatus,
 	); err != nil {
 		return fmt.Errorf("upsert event: %w", err)
 	}
