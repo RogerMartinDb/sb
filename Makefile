@@ -1,4 +1,4 @@
-.PHONY: proto build test migrate-all up down run-all kill-all
+.PHONY: proto build test migrate-all up down run-all kill-all truncate-events
 
 PROTO_DIR := proto
 GEN_DIR   := gen
@@ -87,6 +87,9 @@ migrate-odds:
 migrate-catalog:
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/001_init.sql
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/002_polymarket.sql
+
+truncate-events:
+	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -c "TRUNCATE events CASCADE;"
 
 migrate-bet-history:
 	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/001_init.sql
