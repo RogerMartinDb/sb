@@ -46,10 +46,27 @@ const C = {
   selText:       '#071222',
 }
 
+function dateKey(iso: string): string {
+  // Returns YYYY-MM-DD in local time for grouping.
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function dateLabel(key: string): string {
+  const today = dateKey(new Date().toISOString())
+  const tomorrow = dateKey(new Date(Date.now() + 86_400_000).toISOString())
+  if (key === today) return 'TODAY'
+  if (key === tomorrow) return 'TOMORROW'
+  // e.g. "MON, MAR 10"
+  const d = new Date(`${key}T12:00:00`)
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
+}
+
 export default function EventList({ onSelectBet }: Props) {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     let active = true
@@ -73,9 +90,65 @@ export default function EventList({ onSelectBet }: Props) {
     { label: 'Total',  type: 'TOTAL' },
   ]
 
+  // Group events by local calendar date, preserving sort order.
+  const groups: { key: string; evs: Event[] }[] = []
+  for (const ev of events) {
+    const k = dateKey(ev.starts_at)
+    const last = groups[groups.length - 1]
+    if (last && last.key === k) {
+      last.evs.push(ev)
+    } else {
+      groups.push({ key: k, evs: [ev] })
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {events.map(ev => {
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      {groups.map(({ key, evs }) => {
+        const isCollapsed = collapsed[key] ?? false
+        return (
+        <div key={key}>
+          {/* Date section header */}
+          <button
+            onClick={() => setCollapsed(prev => ({ ...prev, [key]: !isCollapsed }))}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '16px 0 10px',
+              textAlign: 'left',
+            }}
+          >
+            <span style={{
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: '0.1em',
+              color: C.text,
+              flexShrink: 0,
+            }}>
+              {dateLabel(key)}
+            </span>
+            <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>
+              {evs.length} {evs.length === 1 ? 'game' : 'games'}
+            </span>
+            <div style={{ flex: 1, height: 1, background: C.border }} />
+            <span style={{
+              fontSize: 10,
+              color: C.muted,
+              flexShrink: 0,
+              transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+              display: 'inline-block',
+            }}>▼</span>
+          </button>
+
+          {!isCollapsed && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 6 }}>
+      {evs.map(ev => {
         const mainMarkets = ev.markets.filter(m => m.is_main)
         const byType = Object.fromEntries(
           COLS.map(c => [c.type, mainMarkets.find((m: Market) => m.market_type === c.type)])
@@ -107,8 +180,8 @@ export default function EventList({ onSelectBet }: Props) {
             }}>
               <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
               <span style={{ fontSize: 11, color: C.muted, marginLeft: 10 }}>
-                {new Date(ev.starts_at).toLocaleString(undefined, {
-                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                {new Date(ev.starts_at).toLocaleTimeString(undefined, {
+                  hour: '2-digit', minute: '2-digit',
                 })}
               </span>
             </div>
@@ -226,6 +299,11 @@ export default function EventList({ onSelectBet }: Props) {
               </div>
             ))}
           </div>
+        )
+      })}
+          </div>
+          )}
+        </div>
         )
       })}
     </div>
