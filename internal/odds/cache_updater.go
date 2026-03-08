@@ -22,7 +22,7 @@ const (
 	ConsumerGroupOdds = "odds-cache-updater-cg"
 
 	// OddsCacheTTL is the Redis TTL for odds cache entries (30s per spec).
-	OddsCacheTTL = 30 * time.Second
+	OddsCacheTTL = 48 * time.Hour
 )
 
 // OddsUpdatedEvent is the canonical payload published to the odds.updated topic
