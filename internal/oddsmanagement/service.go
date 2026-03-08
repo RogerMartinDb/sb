@@ -128,7 +128,7 @@ func (s *Service) handleEvent(ctx context.Context, msg *sarama.ConsumerMessage) 
 
 // handleNormalisedFeed processes external price signals. It fetches feed
 // probabilities for all selections in the market from the catalog DB,
-// computes a 20-cent line using logit vig, and writes odds for each selection.
+// computes vigged odds using a fixed logit vig (calibrated to -110/-110 at even money),
 func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	var event struct {
 		EventType string `json:"event_type"`
@@ -280,15 +280,22 @@ type SelectionResult struct {
 	American        int     // 0 if zeroed out
 }
 
-// ComputeMarketOdds computes vigged odds for a binary market using logit vig
-// calibrated to a 20-cent line.
+// vigDelta is the logit shift that applies a -110/-110 vig to a 50-50 market.
+//
+// Derivation: -110 American → decimal 210/110 → implied prob 110/210 = 11/21.
+// sigmoid(logit(0.5) + δ) = 11/21  ⟹  δ = logit(11/21) = ln(1.1).
+//
+// This constant vig is then applied uniformly to all markets regardless of
+// the true probability split, so the book margin is consistent.
+var vigDelta = math.Log(1.1)
+
+// ComputeMarketOdds computes vigged odds for a binary market using logit vig.
 //
 // Steps:
-//  1. Average feed probabilities per selection (ready for multiple feeds).
-//  2. Normalise to fair probabilities (sum to 1).
-//  3. Binary-search for the logit shift δ that produces a 20-cent American
-//     odds spread.
-//  4. If a selection's vigged implied probability is lower than its original
+//  1. Normalise feed probabilities to fair probabilities (sum to 1).
+//  2. Apply a fixed logit shift δ = ln(1.1), calibrated so that a 50-50
+//     market produces -110 / -110 (a standard 20-cent line at even money).
+//  3. If a selection's vigged implied probability is lower than its original
 //     feed probability, its price is set to zero.
 func ComputeMarketOdds(sels []SelectionInput) []SelectionResult {
 	if len(sels) != 2 {
@@ -310,7 +317,7 @@ func ComputeMarketOdds(sels []SelectionInput) []SelectionResult {
 	p0 = clamp(p0, eps, 1-eps)
 	p1 = clamp(p1, eps, 1-eps)
 
-	delta := find20CentDelta(p0, p1)
+	delta := vigDelta
 
 	results := make([]SelectionResult, 2)
 	fairProbs := [2]float64{p0, p1}

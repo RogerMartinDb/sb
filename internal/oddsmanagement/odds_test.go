@@ -77,24 +77,37 @@ func TestComputeMarketOdds_Basic(t *testing.T) {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
 
-	for _, r := range results {
+	// With a fixed vigDelta applied, each vigged prob should equal
+	// sigmoid(logit(fairProb) + vigDelta). Fair probs here are 0.55 and 0.45.
+	fairProbs := [2]float64{0.55, 0.45}
+	for i, r := range results {
 		if r.Decimal == 0 {
 			t.Errorf("selection %s: unexpected zero price (feed=%.4f, vigged=%.6f)",
 				r.ID, r.FeedProbability, r.ViggedProb)
 		}
+		wantVigged := sigmoid(logit(fairProbs[i]) + vigDelta)
+		if math.Abs(r.ViggedProb-wantVigged) > 1e-9 {
+			t.Errorf("selection %s: vigged=%.9f, want %.9f", r.ID, r.ViggedProb, wantVigged)
+		}
 		t.Logf("selection %s: feed=%.4f vigged=%.6f decimal=%.4f american=%d",
 			r.ID, r.FeedProbability, r.ViggedProb, r.Decimal, r.American)
 	}
+}
 
-	// Check the spread is ~20 cents.
-	a0, a1 := results[0].American, results[1].American
-	favAm, dogAm := a0, a1
-	if a1 < a0 {
-		favAm, dogAm = a1, a0
+func TestComputeMarketOdds_EvenMoney_Spread(t *testing.T) {
+	// At 50/50, the fixed vig should produce exactly -110/-110.
+	sels := []SelectionInput{
+		{ID: "sel-0", FeedProbability: 0.5},
+		{ID: "sel-1", FeedProbability: 0.5},
 	}
-	spread := (-favAm) - dogAm
-	if spread < 19 || spread > 21 {
-		t.Errorf("spread = %d, want ~20", spread)
+	results := ComputeMarketOdds(sels)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for _, r := range results {
+		if r.American != -110 {
+			t.Errorf("selection %s: got American %d, want -110", r.ID, r.American)
+		}
 	}
 }
 
