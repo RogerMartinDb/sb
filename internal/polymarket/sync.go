@@ -154,6 +154,7 @@ func (s *Syncer) syncEvent(ctx context.Context, ev Event, now, cutoff time.Time)
 		"slug", ev.Slug, "title", ev.Title, "starts_at", startTime,
 		"total_markets", len(ev.Markets))
 
+	eventName := strings.ReplaceAll(ev.Title, " vs. ", " @ ")
 	if _, err := s.db.Exec(ctx, `
 		INSERT INTO events (event_id, competition_id, name, starts_at, status)
 		VALUES ($1, $2, $3, $4, 'SCHEDULED')
@@ -161,7 +162,7 @@ func (s *Syncer) syncEvent(ctx context.Context, ev Event, now, cutoff time.Time)
 		    SET name       = EXCLUDED.name,
 		        starts_at  = EXCLUDED.starts_at,
 		        updated_at = NOW()`,
-		ev.ID, competitionID, ev.Title, startTime,
+		ev.ID, competitionID, eventName, startTime,
 	); err != nil {
 		return fmt.Errorf("upsert event: %w", err)
 	}
