@@ -25,8 +25,8 @@ type NormalisedMarketEvent struct {
 	SelectionID string `json:"selection_id,omitempty"`
 
 	// Odds fields (populated for price updates).
-	OddsNumerator   int64 `json:"odds_num,omitempty"`
-	OddsDenominator int64 `json:"odds_den,omitempty"`
+	OddsDecimal  float64 `json:"odds_decimal,omitempty"`
+	OddsAmerican int     `json:"odds_american,omitempty"`
 
 	// Result fields (populated for market.resulted events).
 	WinningSelectionID string `json:"winning_selection_id,omitempty"`

@@ -3,15 +3,42 @@
 // Bet History queries go to /history-api/* → localhost:8082.
 
 export interface Odds {
-  num: number
-  den: number
+  decimal: number
+  american: number
+}
+
+export interface Selection {
+  selection_id: string
+  name: string
+  target_value: number
+  odds_decimal: number
+  odds_american: number
+}
+
+export interface Market {
+  market_id: string
+  name: string
+  status: string
+  market_type: string // "ML" | "SPREAD" | "TOTAL"
+  target_value: number
+  is_main: boolean
+  selections: Selection[]
+}
+
+export interface Event {
+  event_id: string
+  competition_id: string
+  name: string
+  starts_at: string
+  status: string
+  markets: Market[]
 }
 
 export interface PlaceBetRequest {
   market_id: string
   selection_id: string
-  odds_num: number
-  odds_den: number
+  odds_decimal: number
+  odds_american: number
   stake_minor: number
   currency: string
 }
@@ -19,8 +46,8 @@ export interface PlaceBetRequest {
 export interface PlaceBetResponse {
   bet_id: string
   status: string
-  odds_num: number
-  odds_den: number
+  odds_decimal: number
+  odds_american: number
   stake: number
   currency: string
   placed_at: string
@@ -30,8 +57,8 @@ export interface Bet {
   bet_id: string
   market_id: string
   selection_id: string
-  odds_num: number
-  odds_den: number
+  odds_decimal: number
+  odds_american: number
   stake_minor: number
   currency: string
   status: string
@@ -80,6 +107,10 @@ async function get<T>(path: string): Promise<T> {
   const data = await res.json()
   if (!res.ok) throw new ApiError(data.error ?? 'UNKNOWN', res.status)
   return data as T
+}
+
+export function getEvents(): Promise<Event[]> {
+  return get<Event[]>('/catalog-api/events')
 }
 
 export function placeBet(req: PlaceBetRequest, idempotencyKey: string): Promise<PlaceBetResponse> {

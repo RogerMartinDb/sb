@@ -118,12 +118,12 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 // placeBetHTTPRequest is the JSON body expected from the API Gateway.
 type placeBetHTTPRequest struct {
-	MarketID         string `json:"market_id"`
-	SelectionID      string `json:"selection_id"`
-	RequestedOddsNum int64  `json:"odds_num"`
-	RequestedOddsDen int64  `json:"odds_den"`
-	StakeMinor       int64  `json:"stake_minor"`
-	Currency         string `json:"currency"`
+	MarketID              string  `json:"market_id"`
+	SelectionID           string  `json:"selection_id"`
+	RequestedOddsDecimal  float64 `json:"odds_decimal"`
+	RequestedOddsAmerican int     `json:"odds_american"`
+	StakeMinor            int64   `json:"stake_minor"`
+	Currency              string  `json:"currency"`
 }
 
 func makePlaceBetHandler(flow *betacceptance.BetFlow, logger *slog.Logger) http.HandlerFunc {
@@ -147,14 +147,14 @@ func makePlaceBetHandler(flow *betacceptance.BetFlow, logger *slog.Logger) http.
 		}
 
 		resp, err := flow.PlaceBet(r.Context(), betacceptance.PlaceBetRequest{
-			IdempotencyKey:   idemKey,
-			UserID:           userID,
-			MarketID:         body.MarketID,
-			SelectionID:      body.SelectionID,
-			RequestedOddsNum: body.RequestedOddsNum,
-			RequestedOddsDen: body.RequestedOddsDen,
-			StakeMinor:       body.StakeMinor,
-			Currency:         body.Currency,
+			IdempotencyKey:        idemKey,
+			UserID:                userID,
+			MarketID:              body.MarketID,
+			SelectionID:           body.SelectionID,
+			RequestedOddsDecimal:  body.RequestedOddsDecimal,
+			RequestedOddsAmerican: body.RequestedOddsAmerican,
+			StakeMinor:            body.StakeMinor,
+			Currency:              body.Currency,
 		})
 		if err != nil {
 			httpErr := mapBetFlowError(err)
@@ -168,13 +168,13 @@ func makePlaceBetHandler(flow *betacceptance.BetFlow, logger *slog.Logger) http.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"bet_id":    resp.BetID,
-			"status":    resp.Status,
-			"odds_num":  resp.OddsNum,
-			"odds_den":  resp.OddsDen,
-			"stake":     resp.Stake,
-			"currency":  resp.Currency,
-			"placed_at": resp.PlacedAt.Format(time.RFC3339Nano),
+			"bet_id":        resp.BetID,
+			"status":        resp.Status,
+			"odds_decimal":  resp.OddsDecimal,
+			"odds_american": resp.OddsAmerican,
+			"stake":         resp.Stake,
+			"currency":      resp.Currency,
+			"placed_at":     resp.PlacedAt.Format(time.RFC3339Nano),
 		})
 	}
 }

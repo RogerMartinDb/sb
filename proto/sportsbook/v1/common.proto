@@ -11,11 +11,12 @@ message Money {
   string currency     = 2; // ISO 4217, e.g. "GBP"
 }
 
-// Odds represent fractional / decimal odds in a canonical decimal form.
-// Stored as numerator/denominator to avoid floating-point errors.
+// Odds in American and Decimal formats.
+// Decimal is the canonical computational form (e.g. 2.50 = total return per unit staked).
+// American is the display form (e.g. +150 underdog, -200 favourite).
 message Odds {
-  int64 numerator   = 1;
-  int64 denominator = 2;
+  double decimal  = 1; // e.g. 2.50
+  int32  american = 2; // e.g. +150 or -200
 }
 
 // KYCStatus mirrors the Identity service enum so callers don't need to

@@ -28,10 +28,10 @@ const (
 // OddsUpdatedEvent is the canonical payload published to the odds.updated topic
 // by the Odds Management Service after computing new odds.
 type OddsUpdatedEvent struct {
-	MarketID    string `json:"market_id"`
-	SelectionID string `json:"selection_id"`
-	Numerator   int64  `json:"num"`
-	Denominator int64  `json:"den"`
+	MarketID    string  `json:"market_id"`
+	SelectionID string  `json:"selection_id"`
+	Decimal     float64 `json:"decimal"`  // e.g. 2.50
+	American    int     `json:"american"` // e.g. +150 or -200
 	// SourceEventOffset is the offset of the market-data.normalised event that
 	// triggered this odds computation. Written into Redis so Bet Acceptance can
 	// use it as a secondary consistency signal alongside the lag check.
@@ -42,10 +42,10 @@ type OddsUpdatedEvent struct {
 // CachedOddsEntry is the JSON blob written into Redis.
 // Key: odds:{market_id}:{selection_id}
 type CachedOddsEntry struct {
-	Numerator         int64  `json:"num"`
-	Denominator       int64  `json:"den"`
-	SourceEventOffset int64  `json:"src_offset"`
-	UpdatedAt         string `json:"updated_at"`
+	Decimal           float64 `json:"decimal"`
+	American          int     `json:"american"`
+	SourceEventOffset int64   `json:"src_offset"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 // CacheUpdater consumes the odds.updated topic and writes entries into the
@@ -145,8 +145,8 @@ func (h *cacheUpdaterHandler) handleMessage(ctx context.Context, msg *sarama.Con
 	}
 
 	entry := CachedOddsEntry{
-		Numerator:         event.Numerator,
-		Denominator:       event.Denominator,
+		Decimal:           event.Decimal,
+		American:          event.American,
 		SourceEventOffset: event.SourceEventOffset,
 		UpdatedAt:         time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -163,8 +163,8 @@ func (h *cacheUpdaterHandler) handleMessage(ctx context.Context, msg *sarama.Con
 	h.logger.Debug("cache_updater: odds cached",
 		"market_id", event.MarketID,
 		"selection_id", event.SelectionID,
-		"num", event.Numerator,
-		"den", event.Denominator,
+		"decimal", event.Decimal,
+		"american", event.American,
 		"src_offset", event.SourceEventOffset,
 	)
 	return nil

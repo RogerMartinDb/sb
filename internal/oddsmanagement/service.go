@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -22,23 +23,26 @@ const OddsManagementConsumerGroup = "odds-management-cg"
 
 // OddsUpdatedEvent is the payload published to odds.updated.
 type OddsUpdatedEvent struct {
-	MarketID          string `json:"market_id"`
-	SelectionID       string `json:"selection_id"`
-	Numerator         int64  `json:"num"`
-	Denominator       int64  `json:"den"`
-	SourceEventOffset int64  `json:"src_offset"` // offset of the triggering event
-	ComputedAt        string `json:"computed_at"`
+	MarketID          string  `json:"market_id"`
+	SelectionID       string  `json:"selection_id"`
+	Decimal           float64 `json:"decimal"`  // e.g. 2.50
+	American          int     `json:"american"` // e.g. +150 or -200
+	SourceEventOffset int64   `json:"src_offset"` // offset of the triggering event
+	ComputedAt        string  `json:"computed_at"`
 }
 
 // Service is the Odds Management Service.
 type Service struct {
-	db       *pgxpool.Pool
-	producer sarama.SyncProducer
-	logger   *slog.Logger
+	db        *pgxpool.Pool // odds DB
+	catalogDB *pgxpool.Pool // catalog DB (read-only, for feed probabilities)
+	producer  sarama.SyncProducer
+	logger    *slog.Logger
 }
 
 // NewService creates the service with a Kafka producer for odds.updated.
-func NewService(db *pgxpool.Pool, brokers []string, logger *slog.Logger) (*Service, error) {
+// catalogDB is a read-only connection to the catalog database for fetching
+// selection feed probabilities.
+func NewService(db *pgxpool.Pool, catalogDB *pgxpool.Pool, brokers []string, logger *slog.Logger) (*Service, error) {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V3_6_0_0
 	cfg.Producer.RequiredAcks = sarama.WaitForAll
@@ -51,7 +55,7 @@ func NewService(db *pgxpool.Pool, brokers []string, logger *slog.Logger) (*Servi
 	if err != nil {
 		return nil, fmt.Errorf("odds: create producer: %w", err)
 	}
-	return &Service{db: db, producer: producer, logger: logger}, nil
+	return &Service{db: db, catalogDB: catalogDB, producer: producer, logger: logger}, nil
 }
 
 // RunConsumer starts consuming market-data.normalised and bet.placed topics.
@@ -119,14 +123,13 @@ func (s *Service) handleEvent(ctx context.Context, msg *sarama.ConsumerMessage) 
 	}
 }
 
-// handleNormalisedFeed processes external price signals.
+// handleNormalisedFeed processes external price signals. It fetches feed
+// probabilities for all selections in the market from the catalog DB,
+// computes a 20-cent line using logit vig, and writes odds for each selection.
 func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	var event struct {
-		EventType       string `json:"event_type"`
-		MarketID        string `json:"market_id"`
-		SelectionID     string `json:"selection_id"`
-		OddsNumerator   int64  `json:"odds_num"`
-		OddsDenominator int64  `json:"odds_den"`
+		EventType string `json:"event_type"`
+		MarketID  string `json:"market_id"`
 	}
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
 		return fmt.Errorf("unmarshal feed event: %w", err)
@@ -135,11 +138,48 @@ func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.Consumer
 		return nil
 	}
 
-	// Compute final offered odds (apply margin, limits, etc.).
-	// Stub: use raw odds for now.
-	offeredNum, offeredDen := applyMargin(event.OddsNumerator, event.OddsDenominator)
+	// Fetch selections with feed probabilities from catalog DB.
+	rows, err := s.catalogDB.Query(ctx,
+		`SELECT selection_id, feed_probability FROM selections
+		 WHERE market_id = $1 AND active = true AND feed_probability IS NOT NULL
+		 ORDER BY selection_id`,
+		event.MarketID)
+	if err != nil {
+		return fmt.Errorf("fetch selections: %w", err)
+	}
+	defer rows.Close()
 
-	return s.writeOddsAndPublish(ctx, event.MarketID, event.SelectionID, offeredNum, offeredDen, msg.Offset)
+	var sels []SelectionInput
+	for rows.Next() {
+		var si SelectionInput
+		if err := rows.Scan(&si.ID, &si.FeedProbability); err != nil {
+			return fmt.Errorf("scan selection: %w", err)
+		}
+		sels = append(sels, si)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate selections: %w", err)
+	}
+
+	if len(sels) != 2 {
+		s.logger.Warn("odds: market does not have exactly 2 selections, skipping",
+			"market_id", event.MarketID, "count", len(sels))
+		return nil
+	}
+
+	results := ComputeMarketOdds(sels)
+	for _, r := range results {
+		if r.Decimal == 0 {
+			s.logger.Warn("odds: vigged prob < feed prob, price zeroed",
+				"market_id", event.MarketID, "selection_id", r.ID,
+				"feed_prob", r.FeedProbability, "vigged_prob", r.ViggedProb)
+			continue
+		}
+		if err := s.writeOddsAndPublish(ctx, event.MarketID, r.ID, r.Decimal, r.American, msg.Offset); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // handleBetPlaced adjusts odds in response to bet volume (risk management).
@@ -154,35 +194,36 @@ func (s *Service) handleBetPlaced(ctx context.Context, msg *sarama.ConsumerMessa
 	}
 
 	// Read current odds from the DB.
-	var currentNum, currentDen int64
+	var currentDecimal float64
 	err := s.db.QueryRow(ctx,
-		`SELECT offered_num, offered_den FROM odds
+		`SELECT offered_decimal FROM odds
 		 WHERE market_id = $1 AND selection_id = $2
 		 ORDER BY updated_at DESC LIMIT 1`,
 		event.MarketID, event.SelectionID,
-	).Scan(&currentNum, &currentDen)
+	).Scan(&currentDecimal)
 	if err != nil {
 		return nil // no odds yet; skip
 	}
 
 	// Adjust odds based on liability. Stub: shorten odds slightly on large bets.
-	newNum, newDen := adjustForLiability(currentNum, currentDen, event.StakeMinor)
-	if newNum == currentNum && newDen == currentDen {
+	newDecimal := adjustForLiability(currentDecimal, event.StakeMinor)
+	if newDecimal == currentDecimal {
 		// No change — still commit the offset so lag resolves.
 		return nil
 	}
+	newAmerican := DecimalToAmerican(newDecimal)
 
-	return s.writeOddsAndPublish(ctx, event.MarketID, event.SelectionID, newNum, newDen, msg.Offset)
+	return s.writeOddsAndPublish(ctx, event.MarketID, event.SelectionID, newDecimal, newAmerican, msg.Offset)
 }
 
 // writeOddsAndPublish writes new odds to the DB, then publishes odds.updated.
 // Offset commit happens AFTER this function returns successfully.
-func (s *Service) writeOddsAndPublish(ctx context.Context, marketID, selectionID string, num, den, sourceOffset int64) error {
+func (s *Service) writeOddsAndPublish(ctx context.Context, marketID, selectionID string, decimal float64, american int, sourceOffset int64) error {
 	// 1. Write to DB (ordered so the DB reflects committed state before Kafka publish).
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO odds (market_id, selection_id, offered_num, offered_den, source_offset, updated_at)
+		INSERT INTO odds (market_id, selection_id, offered_decimal, offered_american, source_offset, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW())`,
-		marketID, selectionID, num, den, sourceOffset,
+		marketID, selectionID, decimal, american, sourceOffset,
 	)
 	if err != nil {
 		return fmt.Errorf("write odds to db: %w", err)
@@ -192,8 +233,8 @@ func (s *Service) writeOddsAndPublish(ctx context.Context, marketID, selectionID
 	event := OddsUpdatedEvent{
 		MarketID:          marketID,
 		SelectionID:       selectionID,
-		Numerator:         num,
-		Denominator:       den,
+		Decimal:           decimal,
+		American:          american,
 		SourceEventOffset: sourceOffset,
 		ComputedAt:        time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -218,23 +259,189 @@ func (s *Service) Close() error {
 	return s.producer.Close()
 }
 
-// ── Odds computation helpers (stubs) ─────────────────────────────────────────
+// ── Odds computation ─────────────────────────────────────────────────────────
 
-// applyMargin applies the operator's overround to the raw provider odds.
-// Stub: 5% margin reduction.
-func applyMargin(num, den int64) (int64, int64) {
-	// Convert to decimal, apply 5% reduction, convert back.
-	if den == 0 {
-		return num, den
-	}
-	return num * 95, den * 100
+// SelectionInput is a selection with its feed probability, used as input to
+// the odds computation.
+type SelectionInput struct {
+	ID              string
+	FeedProbability float64
 }
 
-// adjustForLiability shortens odds slightly based on accumulated stake.
-func adjustForLiability(num, den, stakeMinor int64) (int64, int64) {
-	// Stub: shorten by 1% for stakes over £50.
-	if stakeMinor > 5000 && num > 0 {
-		return num * 99, den * 100
+// SelectionResult holds computed odds for one selection.
+type SelectionResult struct {
+	ID              string
+	FeedProbability float64
+	ViggedProb      float64 // implied probability after vig
+	Decimal         float64 // 0 if zeroed out
+	American        int     // 0 if zeroed out
+}
+
+// ComputeMarketOdds computes vigged odds for a binary market using logit vig
+// calibrated to a 20-cent line.
+//
+// Steps:
+//  1. Average feed probabilities per selection (ready for multiple feeds).
+//  2. Normalise to fair probabilities (sum to 1).
+//  3. Binary-search for the logit shift δ that produces a 20-cent American
+//     odds spread.
+//  4. If a selection's vigged implied probability is lower than its original
+//     feed probability, its price is set to zero.
+func ComputeMarketOdds(sels []SelectionInput) []SelectionResult {
+	if len(sels) != 2 {
+		return nil
 	}
-	return num, den
+
+	fp0, fp1 := sels[0].FeedProbability, sels[1].FeedProbability
+
+	// Normalise to fair probabilities (sum to 1).
+	total := fp0 + fp1
+	if total <= 0 {
+		return nil
+	}
+	p0 := fp0 / total
+	p1 := fp1 / total
+
+	// Clamp to avoid logit domain errors at extremes.
+	const eps = 1e-6
+	p0 = clamp(p0, eps, 1-eps)
+	p1 = clamp(p1, eps, 1-eps)
+
+	delta := find20CentDelta(p0, p1)
+
+	results := make([]SelectionResult, 2)
+	fairProbs := [2]float64{p0, p1}
+	for i := range sels {
+		q := sigmoid(logit(fairProbs[i]) + delta)
+		dec := 1.0 / q
+		am := DecimalToAmerican(dec)
+
+		// If vigged implied probability is lower than the feed probability,
+		// the line would give the bettor positive EV — zero out the price.
+		if q < sels[i].FeedProbability {
+			dec = 0
+			am = 0
+		}
+
+		results[i] = SelectionResult{
+			ID:              sels[i].ID,
+			FeedProbability: sels[i].FeedProbability,
+			ViggedProb:      q,
+			Decimal:         dec,
+			American:        am,
+		}
+	}
+	return results
+}
+
+// ── Logit vig helpers ────────────────────────────────────────────────────────
+
+func logit(p float64) float64 {
+	return math.Log(p / (1 - p))
+}
+
+func sigmoid(x float64) float64 {
+	return 1.0 / (1.0 + math.Exp(-x))
+}
+
+func clamp(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// americanFloat converts decimal odds to American odds as a float (no rounding),
+// used internally by the binary search.
+func americanFloat(decimal float64) float64 {
+	if decimal >= 2.0 {
+		return (decimal - 1.0) * 100.0
+	}
+	if decimal <= 1.0 {
+		return 0
+	}
+	return -100.0 / (decimal - 1.0)
+}
+
+// centSpread computes the American-odds cent spread for a two-outcome market.
+// qFav must be >= qDog. For example:
+//
+//	-130 / +120 → spread = 130 - 120 = 10
+//	-105 / -105 → spread = 105 + 105 - 200 = 10
+func centSpread(qFav, qDog float64) float64 {
+	aFav := americanFloat(1.0 / qFav) // negative (favourite)
+	aDog := americanFloat(1.0 / qDog) // positive or negative (underdog)
+
+	if aFav < 0 && aDog >= 0 {
+		return (-aFav) - aDog
+	}
+	// Both negative (near even money): total juice = |a1| + |a2| - 200.
+	if aFav < 0 && aDog < 0 {
+		return (-aFav) + (-aDog) - 200
+	}
+	return 0
+}
+
+// find20CentDelta binary-searches for the logit shift δ that produces a
+// 20-cent American odds spread for a binary market with fair probabilities
+// p0 and p1.
+func find20CentDelta(p0, p1 float64) float64 {
+	lo, hi := 0.0, 5.0
+	for i := 0; i < 100; i++ {
+		mid := (lo + hi) / 2
+		q0 := sigmoid(logit(p0) + mid)
+		q1 := sigmoid(logit(p1) + mid)
+
+		qFav, qDog := q0, q1
+		if q1 > q0 {
+			qFav, qDog = q1, q0
+		}
+
+		if centSpread(qFav, qDog) < 20.0 {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return (lo + hi) / 2
+}
+
+// ── Liability adjustment ─────────────────────────────────────────────────────
+
+// adjustForLiability shortens odds slightly based on accumulated stake.
+func adjustForLiability(decimal float64, stakeMinor int64) float64 {
+	// Stub: shorten by 1% for stakes over £50.
+	if stakeMinor > 5000 && decimal > 1.0 {
+		return 1.0 + (decimal-1.0)*0.99
+	}
+	return decimal
+}
+
+// ── American / Decimal conversion ────────────────────────────────────────────
+
+// DecimalToAmerican converts decimal odds to American format.
+// Decimal >= 2.0 → positive American (e.g. 2.50 → +150).
+// Decimal < 2.0  → negative American (e.g. 1.50 → -200).
+func DecimalToAmerican(decimal float64) int {
+	if decimal >= 2.0 {
+		return int(math.Round((decimal - 1.0) * 100))
+	}
+	if decimal <= 1.0 {
+		return 0
+	}
+	return int(math.Round(-100.0 / (decimal - 1.0)))
+}
+
+// AmericanToDecimal converts American odds to decimal format.
+func AmericanToDecimal(american int) float64 {
+	if american > 0 {
+		return float64(american)/100.0 + 1.0
+	}
+	if american < 0 {
+		return 100.0/float64(-american) + 1.0
+	}
+	return 1.0 // even money edge case
 }

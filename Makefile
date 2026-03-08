@@ -82,15 +82,19 @@ migrate-wallet:
 
 migrate-odds:
 	psql "postgres://sb:sb_secret@localhost:5434/db_odds" -f migrations/db_odds/001_init.sql
+	psql "postgres://sb:sb_secret@localhost:5434/db_odds" -f migrations/db_odds/002_american_decimal_odds.sql
 
 migrate-catalog:
 	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/001_init.sql
+	psql "postgres://sb:sb_secret@localhost:5435/db_catalog" -f migrations/db_catalog/002_polymarket.sql
 
 migrate-bet-history:
 	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/001_init.sql
+	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/002_american_decimal_odds.sql
 
 migrate-settlement:
 	psql "postgres://sb:sb_secret@localhost:5437/db_settlement" -f migrations/db_settlement/001_init.sql
+	psql "postgres://sb:sb_secret@localhost:5437/db_settlement" -f migrations/db_settlement/002_american_decimal_odds.sql
 
 migrate-identity:
 	psql "postgres://sb:sb_secret@localhost:5438/db_identity" -f migrations/db_identity/001_init.sql

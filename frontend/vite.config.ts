@@ -14,6 +14,14 @@ export default defineConfig({
         target: 'http://localhost:8084',
         rewrite: path => path.replace(/^\/identity/, ''),
       },
+      '/catalog-api': {
+        target: 'http://localhost:8086',
+        rewrite: path => path.replace(/^\/catalog-api/, ''),
+      },
+      '/history-api': {
+        target: 'http://localhost:8082',
+        rewrite: path => path.replace(/^\/history-api/, ''),
+      },
     },
   },
 })

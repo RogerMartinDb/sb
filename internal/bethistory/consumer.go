@@ -22,18 +22,18 @@ const (
 
 // BetRecord is the read model stored in db_bet_history.
 type BetRecord struct {
-	BetID       string
-	UserID      string
-	MarketID    string
-	SelectionID string
-	OddsNum     int64
-	OddsDen     int64
-	StakeMinor  int64
-	Currency    string
-	Status      string // PLACED, SETTLED_WIN, SETTLED_LOSS, VOID
-	PlacedAt    time.Time
-	SettledAt   *time.Time
-	PayoutMinor *int64
+	BetID        string
+	UserID       string
+	MarketID     string
+	SelectionID  string
+	OddsDecimal  float64
+	OddsAmerican int
+	StakeMinor   int64
+	Currency     string
+	Status       string // PLACED, SETTLED_WIN, SETTLED_LOSS, VOID
+	PlacedAt     time.Time
+	SettledAt    *time.Time
+	PayoutMinor  *int64
 }
 
 // Consumer processes bet.placed and bet.settled events from Kafka.
@@ -114,15 +114,15 @@ func (h *betHistoryHandler) ConsumeClaim(session sarama.ConsumerGroupSession, cl
 // handleBetPlaced inserts the bet record and confirms the wallet transaction.
 func (c *Consumer) handleBetPlaced(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	var event struct {
-		BetID       string `json:"bet_id"`
-		UserID      string `json:"user_id"`
-		MarketID    string `json:"market_id"`
-		SelectionID string `json:"selection_id"`
-		OddsNum     int64  `json:"odds_num"`
-		OddsDen     int64  `json:"odds_den"`
-		StakeMinor  int64  `json:"stake_minor"`
-		Currency    string `json:"currency"`
-		PlacedAt    string `json:"placed_at"`
+		BetID        string  `json:"bet_id"`
+		UserID       string  `json:"user_id"`
+		MarketID     string  `json:"market_id"`
+		SelectionID  string  `json:"selection_id"`
+		OddsDecimal  float64 `json:"odds_decimal"`
+		OddsAmerican int     `json:"odds_american"`
+		StakeMinor   int64   `json:"stake_minor"`
+		Currency     string  `json:"currency"`
+		PlacedAt     string  `json:"placed_at"`
 		// TransactionID comes from a Kafka header set by Bet Acceptance.
 	}
 	if err := json.Unmarshal(msg.Value, &event); err != nil {
@@ -145,12 +145,12 @@ func (c *Consumer) handleBetPlaced(ctx context.Context, msg *sarama.ConsumerMess
 
 	// Insert into bet_history (idempotent via ON CONFLICT DO NOTHING).
 	_, err = c.db.Exec(ctx, `
-		INSERT INTO bets (bet_id, user_id, market_id, selection_id, odds_num, odds_den,
+		INSERT INTO bets (bet_id, user_id, market_id, selection_id, odds_decimal, odds_american,
 		                  stake_minor, currency, status, placed_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PLACED', $9)
 		ON CONFLICT (bet_id) DO NOTHING`,
 		event.BetID, event.UserID, event.MarketID, event.SelectionID,
-		event.OddsNum, event.OddsDen, event.StakeMinor, event.Currency, placedAt,
+		event.OddsDecimal, event.OddsAmerican, event.StakeMinor, event.Currency, placedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("insert bet record: %w", err)

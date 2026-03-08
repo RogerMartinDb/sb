@@ -65,7 +65,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 			return
 		}
 		rows, err := db.Query(r.Context(), `
-			SELECT bet_id, market_id, selection_id, odds_num, odds_den,
+			SELECT bet_id, market_id, selection_id, odds_decimal, odds_american,
 			       stake_minor, currency, status, placed_at, settled_at, payout_minor
 			FROM bets WHERE user_id = $1 ORDER BY placed_at DESC LIMIT 50`,
 			userID,
@@ -80,25 +80,27 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		for rows.Next() {
 			var (
 				betID, marketID, selectionID, currency, status string
-				oddsNum, oddsDen, stakeMinor                   int64
+				oddsDecimal                                    float64
+				oddsAmerican                                   int
+				stakeMinor                                     int64
 				placedAt                                       time.Time
 				settledAt                                      *time.Time
 				payoutMinor                                    *int64
 			)
-			if err := rows.Scan(&betID, &marketID, &selectionID, &oddsNum, &oddsDen,
+			if err := rows.Scan(&betID, &marketID, &selectionID, &oddsDecimal, &oddsAmerican,
 				&stakeMinor, &currency, &status, &placedAt, &settledAt, &payoutMinor); err != nil {
 				continue
 			}
 			b := map[string]any{
-				"bet_id":       betID,
-				"market_id":    marketID,
-				"selection_id": selectionID,
-				"odds_num":     oddsNum,
-				"odds_den":     oddsDen,
-				"stake_minor":  stakeMinor,
-				"currency":     currency,
-				"status":       status,
-				"placed_at":    placedAt.Format(time.RFC3339),
+				"bet_id":        betID,
+				"market_id":     marketID,
+				"selection_id":  selectionID,
+				"odds_decimal":  oddsDecimal,
+				"odds_american": oddsAmerican,
+				"stake_minor":   stakeMinor,
+				"currency":      currency,
+				"status":        status,
+				"placed_at":     placedAt.Format(time.RFC3339),
 			}
 			if settledAt != nil {
 				b["settled_at"] = settledAt.Format(time.RFC3339)

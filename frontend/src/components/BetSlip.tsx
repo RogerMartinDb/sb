@@ -1,35 +1,24 @@
 import { useState } from 'react'
 import { placeBet, ApiError, type PlaceBetResponse } from '../api'
+import type { SelectedBet } from './EventList'
 
-// Hard-coded demo market. In production these come from the Market Catalog API.
-const DEMO_MARKET = {
-  market_id: 'mkt-premier-league-arsenal-chelsea-match-result',
-  selections: [
-    { selection_id: 'sel-arsenal-win',  name: 'Arsenal Win',  odds_num: 5, odds_den: 4 },
-    { selection_id: 'sel-draw',         name: 'Draw',          odds_num: 9, odds_den: 5 },
-    { selection_id: 'sel-chelsea-win',  name: 'Chelsea Win',   odds_num: 7, odds_den: 4 },
-  ],
+interface Props {
+  selectedBet: SelectedBet
+  onClear: () => void
 }
 
-function formatOdds(num: number, den: number) {
-  return `${num}/${den}`
+function formatOdds(decimal: number, american: number) {
+  const americanStr = american >= 0 ? `+${american}` : `${american}`
+  return `${decimal.toFixed(2)} (${americanStr})`
 }
 
-function uuid() {
-  return crypto.randomUUID()
-}
-
-export default function BetSlip() {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+export default function BetSlip({ selectedBet, onClear }: Props) {
   const [stake, setStake] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PlaceBetResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const selected = DEMO_MARKET.selections.find(s => s.selection_id === selectedId)
-
   async function handlePlaceBet() {
-    if (!selected || !stake) return
     const stakeMinor = Math.round(parseFloat(stake) * 100)
     if (isNaN(stakeMinor) || stakeMinor <= 0) {
       setError('Enter a valid stake')
@@ -42,13 +31,13 @@ export default function BetSlip() {
 
     try {
       const resp = await placeBet({
-        market_id: DEMO_MARKET.market_id,
-        selection_id: selected.selection_id,
-        odds_num: selected.odds_num,
-        odds_den: selected.odds_den,
+        market_id: selectedBet.market_id,
+        selection_id: selectedBet.selection_id,
+        odds_decimal: selectedBet.odds_decimal,
+        odds_american: selectedBet.odds_american,
         stake_minor: stakeMinor,
         currency: 'GBP',
-      }, uuid())
+      }, crypto.randomUUID())
       setResult(resp)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -66,9 +55,9 @@ export default function BetSlip() {
       <div style={{ border: '1px solid #4caf50', borderRadius: 8, padding: 16 }}>
         <h3 style={{ color: '#4caf50' }}>Bet Accepted</h3>
         <p>Bet ID: <code>{result.bet_id}</code></p>
-        <p>Odds: {formatOdds(result.odds_num, result.odds_den)}</p>
+        <p>Odds: {formatOdds(result.odds_decimal, result.odds_american)}</p>
         <p>Stake: £{(result.stake / 100).toFixed(2)}</p>
-        <button onClick={() => { setResult(null); setSelectedId(null); setStake('') }}>
+        <button onClick={() => { setResult(null); setStake(''); onClear() }}>
           Place Another Bet
         </button>
       </div>
@@ -76,77 +65,56 @@ export default function BetSlip() {
   }
 
   return (
-    <div>
-      <h2 style={{ fontSize: 16, marginBottom: 8 }}>Arsenal vs Chelsea — Match Result</h2>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {DEMO_MARKET.selections.map(sel => (
-          <button
-            key={sel.selection_id}
-            onClick={() => setSelectedId(sel.selection_id)}
-            style={{
-              padding: '10px 14px',
-              border: '2px solid',
-              borderColor: selectedId === sel.selection_id ? '#1976d2' : '#ccc',
-              borderRadius: 6,
-              background: selectedId === sel.selection_id ? '#e3f2fd' : '#fff',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>{sel.name}</div>
-            <div style={{ fontSize: 18, color: '#1976d2' }}>{formatOdds(sel.odds_num, sel.odds_den)}</div>
-          </button>
-        ))}
+    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 style={{ fontSize: 15, margin: 0 }}>Bet Slip</h3>
+        <button onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
       </div>
 
-      {selected && (
-        <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 12 }}>
-            Bet Slip — {selected.name} @ {formatOdds(selected.odds_num, selected.odds_den)}
-          </h3>
+      <p style={{ fontSize: 14, marginBottom: 4 }}>{selectedBet.market_name}</p>
+      <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+        {selectedBet.selection_name} @ {formatOdds(selectedBet.odds_decimal, selectedBet.odds_american)}
+      </p>
 
-          <div style={{ marginBottom: 12 }}>
-            <label>
-              Stake (£)
-              <br />
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={stake}
-                onChange={e => setStake(e.target.value)}
-                style={{ padding: 8, width: 120, marginTop: 4 }}
-                placeholder="0.00"
-              />
-            </label>
-          </div>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Stake (£)
+          <br />
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={stake}
+            onChange={e => setStake(e.target.value)}
+            style={{ padding: 8, width: 120, marginTop: 4 }}
+            placeholder="0.00"
+          />
+        </label>
+      </div>
 
-          {stake && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
-            <p style={{ fontSize: 13, color: '#555' }}>
-              Potential return: £{((parseFloat(stake) * selected.odds_num / selected.odds_den) + parseFloat(stake)).toFixed(2)}
-            </p>
-          )}
-
-          {error && <p style={{ color: 'red', fontSize: 14 }}>{error}</p>}
-
-          <button
-            onClick={handlePlaceBet}
-            disabled={loading}
-            style={{
-              padding: '10px 24px',
-              background: '#1976d2',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: 15,
-            }}
-          >
-            {loading ? 'Placing…' : 'Place Bet'}
-          </button>
-        </div>
+      {stake && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
+        <p style={{ fontSize: 13, color: '#555' }}>
+          Potential return: £{(parseFloat(stake) * selectedBet.odds_decimal).toFixed(2)}
+        </p>
       )}
+
+      {error && <p style={{ color: 'red', fontSize: 14 }}>{error}</p>}
+
+      <button
+        onClick={handlePlaceBet}
+        disabled={loading}
+        style={{
+          padding: '10px 24px',
+          background: '#1976d2',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 6,
+          cursor: loading ? 'not-allowed' : 'pointer',
+          fontSize: 15,
+        }}
+      >
+        {loading ? 'Placing…' : 'Place Bet'}
+      </button>
     </div>
   )
 }

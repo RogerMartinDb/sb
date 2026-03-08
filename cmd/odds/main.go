@@ -35,11 +35,18 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	}
 	defer db.Close()
 
+	catalogDBURL := envOr("CATALOG_DB_URL", "postgres://sb:sb_secret@localhost:5435/db_catalog")
+	catalogDB, err := pgxpool.New(ctx, catalogDBURL)
+	if err != nil {
+		return fmt.Errorf("catalog db pool: %w", err)
+	}
+	defer catalogDB.Close()
+
 	redisOdds := redis.NewClient(&redis.Options{Addr: envOr("REDIS_ODDS_ADDR", "localhost:6380")})
 	kafkaBrokers := []string{envOr("KAFKA_BROKERS", "localhost:9092")}
 
 	// ── Odds Management main consumer ─────────────────────────────────────────
-	svc, err := oddsmanagement.NewService(db, kafkaBrokers, logger)
+	svc, err := oddsmanagement.NewService(db, catalogDB, kafkaBrokers, logger)
 	if err != nil {
 		return fmt.Errorf("odds management service: %w", err)
 	}

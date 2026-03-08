@@ -68,21 +68,21 @@ type PlaceBetRequest struct {
 	MarketID       string
 	SelectionID    string
 	// RequestedOdds is the odds the client saw when placing the bet.
-	RequestedOddsNum int64
-	RequestedOddsDen int64
-	StakeMinor       int64  // stake in minor units (e.g. pence)
-	Currency         string
+	RequestedOddsDecimal  float64
+	RequestedOddsAmerican int
+	StakeMinor            int64  // stake in minor units (e.g. pence)
+	Currency              string
 }
 
 // PlaceBetResponse is returned synchronously.
 type PlaceBetResponse struct {
-	BetID     string
-	Status    string // "ACCEPTED"
-	OddsNum   int64
-	OddsDen   int64
-	Stake     int64
-	Currency  string
-	PlacedAt  time.Time
+	BetID        string
+	Status       string // "ACCEPTED"
+	OddsDecimal  float64
+	OddsAmerican int
+	Stake        int64
+	Currency     string
+	PlacedAt     time.Time
 }
 
 // ── Cached odds entry ─────────────────────────────────────────────────────────
@@ -91,9 +91,9 @@ type PlaceBetResponse struct {
 // source_event_offset is the Kafka offset of the odds.updated event that
 // produced this entry — used as a secondary consistency signal.
 type CachedOdds struct {
-	Numerator         int64  `json:"num"`
-	Denominator       int64  `json:"den"`
-	SourceEventOffset int64  `json:"src_offset"`
+	Decimal           float64 `json:"decimal"`
+	American          int     `json:"american"`
+	SourceEventOffset int64   `json:"src_offset"`
 }
 
 // ── BetFlow ───────────────────────────────────────────────────────────────────
@@ -155,13 +155,13 @@ func (f *BetFlow) PlaceBet(ctx context.Context, req PlaceBetRequest) (*PlaceBetR
 		// Already processed — return idempotent response.
 		f.logger.Info("bet_flow: idempotent replay", "bet_id", existingBetID)
 		return &PlaceBetResponse{
-			BetID:    existingBetID,
-			Status:   "ACCEPTED",
-			OddsNum:  req.RequestedOddsNum,
-			OddsDen:  req.RequestedOddsDen,
-			Stake:    req.StakeMinor,
-			Currency: req.Currency,
-			PlacedAt: time.Now(),
+			BetID:        existingBetID,
+			Status:       "ACCEPTED",
+			OddsDecimal:  req.RequestedOddsDecimal,
+			OddsAmerican: req.RequestedOddsAmerican,
+			Stake:        req.StakeMinor,
+			Currency:     req.Currency,
+			PlacedAt:     time.Now(),
 		}, nil
 	}
 
@@ -261,28 +261,26 @@ func (f *BetFlow) PlaceBet(ctx context.Context, req PlaceBetRequest) (*PlaceBetR
 		"market_id", req.MarketID, "stake_minor", req.StakeMinor)
 
 	return &PlaceBetResponse{
-		BetID:    betID,
-		Status:   "ACCEPTED",
-		OddsNum:  currentOdds.Numerator,
-		OddsDen:  currentOdds.Denominator,
-		Stake:    req.StakeMinor,
-		Currency: req.Currency,
-		PlacedAt: time.Now(),
+		BetID:        betID,
+		Status:       "ACCEPTED",
+		OddsDecimal:  currentOdds.Decimal,
+		OddsAmerican: currentOdds.American,
+		Stake:        req.StakeMinor,
+		Currency:     req.Currency,
+		PlacedAt:     time.Now(),
 	}, nil
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func validateOdds(req PlaceBetRequest, current CachedOdds, tolerance float64) error {
-	reqDecimal := float64(req.RequestedOddsNum) / float64(req.RequestedOddsDen)
-	curDecimal := float64(current.Numerator) / float64(current.Denominator)
-	if curDecimal == 0 {
-		return fmt.Errorf("bet_flow: zero denominator in cached odds")
+	if current.Decimal <= 0 {
+		return fmt.Errorf("bet_flow: invalid cached decimal odds: %.4f", current.Decimal)
 	}
-	movement := abs64(reqDecimal-curDecimal) / curDecimal
+	movement := abs64(req.RequestedOddsDecimal-current.Decimal) / current.Decimal
 	if movement > tolerance {
 		return fmt.Errorf("%w: requested %.4f, current %.4f, movement %.2f%%",
-			ErrOddsMoved, reqDecimal, curDecimal, movement*100)
+			ErrOddsMoved, req.RequestedOddsDecimal, current.Decimal, movement*100)
 	}
 	return nil
 }
@@ -304,16 +302,16 @@ func checkLimits(req PlaceBetRequest, limits *sbv1.GetUserLimitsResponse) error 
 
 func buildBetPlacedPayload(betID string, req PlaceBetRequest, odds CachedOdds) (json.RawMessage, error) {
 	event := map[string]any{
-		"event_type":   "bet.placed",
-		"bet_id":       betID,
-		"user_id":      req.UserID,
-		"market_id":    req.MarketID,
-		"selection_id": req.SelectionID,
-		"odds_num":     odds.Numerator,
-		"odds_den":     odds.Denominator,
-		"stake_minor":  req.StakeMinor,
-		"currency":     req.Currency,
-		"placed_at":    time.Now().UTC().Format(time.RFC3339Nano),
+		"event_type":    "bet.placed",
+		"bet_id":        betID,
+		"user_id":       req.UserID,
+		"market_id":     req.MarketID,
+		"selection_id":  req.SelectionID,
+		"odds_decimal":  odds.Decimal,
+		"odds_american": odds.American,
+		"stake_minor":   req.StakeMinor,
+		"currency":      req.Currency,
+		"placed_at":     time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	return json.Marshal(event)
 }

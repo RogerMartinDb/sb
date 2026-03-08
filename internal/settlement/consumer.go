@@ -100,7 +100,7 @@ func (c *Consumer) handleResult(ctx context.Context, msg *sarama.ConsumerMessage
 
 	// Find all unsettled PLACED bets on this market.
 	rows, err := c.db.Query(ctx, `
-		SELECT bet_id, user_id, selection_id, stake_minor, odds_num, odds_den, currency
+		SELECT bet_id, user_id, selection_id, stake_minor, odds_decimal, currency
 		FROM pending_bets
 		WHERE market_id = $1 AND status = 'PLACED'`,
 		event.MarketID,
@@ -115,15 +115,14 @@ func (c *Consumer) handleResult(ctx context.Context, msg *sarama.ConsumerMessage
 		UserID      string
 		SelectionID string
 		StakeMinor  int64
-		OddsNum     int64
-		OddsDen     int64
+		OddsDecimal float64
 		Currency    string
 	}
 
 	var bets []pendingBet
 	for rows.Next() {
 		var b pendingBet
-		if err := rows.Scan(&b.BetID, &b.UserID, &b.SelectionID, &b.StakeMinor, &b.OddsNum, &b.OddsDen, &b.Currency); err != nil {
+		if err := rows.Scan(&b.BetID, &b.UserID, &b.SelectionID, &b.StakeMinor, &b.OddsDecimal, &b.Currency); err != nil {
 			return fmt.Errorf("scan pending bet: %w", err)
 		}
 		bets = append(bets, b)
@@ -139,7 +138,7 @@ func (c *Consumer) handleResult(ctx context.Context, msg *sarama.ConsumerMessage
 
 	for _, bet := range bets {
 		isWin := bet.SelectionID == event.SelectionID
-		if err := c.settleBet(ctx, bet.BetID, bet.UserID, isWin, bet.StakeMinor, bet.OddsNum, bet.OddsDen, bet.Currency, resultsAt); err != nil {
+		if err := c.settleBet(ctx, bet.BetID, bet.UserID, isWin, bet.StakeMinor, bet.OddsDecimal, bet.Currency, resultsAt); err != nil {
 			c.logger.Error("settlement: settle bet failed", "bet_id", bet.BetID, "err", err)
 		}
 	}
@@ -150,15 +149,16 @@ func (c *Consumer) settleBet(
 	ctx context.Context,
 	betID, userID string,
 	isWin bool,
-	stakeMinor, oddsNum, oddsDen int64,
+	stakeMinor int64,
+	oddsDecimal float64,
 	currency string,
 	settledAt time.Time,
 ) error {
 	// Compute payout (only if win).
 	var payoutMinor int64
-	if isWin && oddsDen > 0 {
-		// Decimal odds = num/den; payout = stake * decimal_odds
-		payoutMinor = stakeMinor * oddsNum / oddsDen
+	if isWin && oddsDecimal > 0 {
+		// payout = stake * decimal_odds (decimal odds include the stake return)
+		payoutMinor = int64(float64(stakeMinor) * oddsDecimal)
 	}
 
 	outcome := "LOSS"

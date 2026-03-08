@@ -1,17 +1,19 @@
 import { useState } from 'react'
+import EventList, { type SelectedBet } from './components/EventList'
 import BetSlip from './components/BetSlip'
 import MyBets from './components/MyBets'
 import Login from './components/Login'
 import Register from './components/Register'
 import { setAuthToken } from './api'
 
-type Tab = 'bet' | 'mybets'
+type Tab = 'events' | 'mybets'
 type AuthView = 'login' | 'register'
 
 export default function App() {
   const [token, setToken] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('bet')
+  const [tab, setTab] = useState<Tab>('events')
   const [authView, setAuthView] = useState<AuthView>('login')
+  const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null)
 
   function handleAuth(t: string) {
     setAuthToken(t)
@@ -25,15 +27,15 @@ export default function App() {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: '0 auto', fontFamily: 'sans-serif', padding: 16 }}>
+    <div style={{ maxWidth: 520, margin: '0 auto', fontFamily: 'sans-serif', padding: 16 }}>
       <h1 style={{ fontSize: 20, marginBottom: 16 }}>Sportsbook</h1>
 
       <nav style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <button
-          onClick={() => setTab('bet')}
-          style={{ fontWeight: tab === 'bet' ? 'bold' : 'normal' }}
+          onClick={() => setTab('events')}
+          style={{ fontWeight: tab === 'events' ? 'bold' : 'normal' }}
         >
-          Place Bet
+          Events
         </button>
         <button
           onClick={() => setTab('mybets')}
@@ -43,7 +45,18 @@ export default function App() {
         </button>
       </nav>
 
-      {tab === 'bet' ? <BetSlip /> : <MyBets />}
+      {tab === 'events' ? (
+        <>
+          <EventList onSelectBet={setSelectedBet} />
+          {selectedBet && (
+            <div style={{ marginTop: 16 }}>
+              <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} />
+            </div>
+          )}
+        </>
+      ) : (
+        <MyBets />
+      )}
     </div>
   )
 }

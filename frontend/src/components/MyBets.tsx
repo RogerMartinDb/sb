@@ -8,8 +8,9 @@ const STATUS_COLOURS: Record<string, string> = {
   VOID:         '#9e9e9e',
 }
 
-function formatOdds(num: number, den: number) {
-  return `${num}/${den}`
+function formatOdds(decimal: number, american: number) {
+  const americanStr = american >= 0 ? `+${american}` : `${american}`
+  return `${decimal.toFixed(2)} (${americanStr})`
 }
 
 export default function MyBets() {
@@ -69,7 +70,7 @@ export default function MyBets() {
             </div>
 
             <div style={{ fontSize: 13, marginBottom: 4 }}>
-              Odds: <strong>{formatOdds(bet.odds_num, bet.odds_den)}</strong>
+              Odds: <strong>{formatOdds(bet.odds_decimal, bet.odds_american)}</strong>
               {' · '}
               Stake: <strong>£{(bet.stake_minor / 100).toFixed(2)}</strong>
               {bet.payout_minor != null && (
