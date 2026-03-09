@@ -49,8 +49,8 @@ const SPORTS: Sport[] = [
 ]
 
 interface LeftMenuProps {
-  selected: string | null
-  onSelect: (id: string | null) => void
+  selected: string
+  onSelect: (id: string) => void
 }
 
 function LeftMenu({ selected, onSelect }: LeftMenuProps) {
@@ -105,7 +105,7 @@ function LeftMenu({ selected, onSelect }: LeftMenuProps) {
               return (
                 <button
                   key={comp.id}
-                  onClick={() => onSelect(isActive ? null : comp.id)}
+                  onClick={() => onSelect(comp.id)}
                   style={{
                     display: 'block',
                     width: '100%',
@@ -148,7 +148,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('events')
   const [authModal, setAuthModal] = useState<AuthModal>(null)
   const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null)
-  const [competitionFilter, setCompetitionFilter] = useState<string | null>(null)
+  const [competitionFilter, setCompetitionFilter] = useState<string>('nba')
 
   function handleAuth(t: string, e: string) {
     setAuthToken(t)
@@ -257,7 +257,7 @@ export default function App() {
 
         {tab === 'events' ? (
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <LeftMenu selected={competitionFilter} onSelect={setCompetitionFilter} />
+            <LeftMenu selected={competitionFilter} onSelect={(id) => setCompetitionFilter(id)} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <EventList
                 onSelectBet={setSelectedBet}
