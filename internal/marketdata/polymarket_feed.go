@@ -47,14 +47,15 @@ func NewIranFeed(logger *slog.Logger) *PolymarketFeed {
 	}
 }
 
-// NewNCAABFeed creates a feed for NCAAB events (tag 101952, slug prefix "ncaab-").
-func NewNCAABFeed(logger *slog.Logger) *PolymarketFeed {
+// NewNCAABFeed creates a feed for NCAAB events (tag 28, slug prefix "cbb-").
+func NewNCAABFeed(eventMatcher *EventMatcher, logger *slog.Logger) *PolymarketFeed {
 	return &PolymarketFeed{
-		client:     polymarket.NewClient(logger),
-		logger:     logger,
-		providerID: "polymarket-ncaab",
-		slugPrefix: "cbb-",
-		tagID:      polymarket.NCAABTagID,
+		client:       polymarket.NewClient(logger),
+		eventMatcher: eventMatcher,
+		logger:       logger,
+		providerID:   "polymarket-ncaab",
+		slugPrefix:   "cbb-",
+		tagID:        polymarket.NCAABTagID,
 	}
 }
 

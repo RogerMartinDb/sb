@@ -38,9 +38,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	feeds := []marketdata.ProviderFeed{
 		marketdata.NewSportradarFeed(sportradarURL, sportradarKey, logger),
 		marketdata.NewPolymarketFeed(eventMatcher, logger),
-		marketdata.NewNCAABFeed(logger),
+		marketdata.NewNCAABFeed(eventMatcher, logger),
 		marketdata.NewIranFeed(logger),
 		marketdata.NewNBAScoreFeed(eventMatcher, logger),
+		marketdata.NewNCAABScoreFeed(eventMatcher, logger),
 	}
 
 	normaliser := marketdata.NewCompositeNormaliser(map[string]marketdata.Normaliser{
@@ -49,6 +50,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		"polymarket-ncaab": marketdata.NewPolymarketNormaliser("ncaab", "NCAAB"),
 		"polymarket-iran":  marketdata.NewPoliticsNormaliser("politics", "Politics", "iran", "Iran", "IR"),
 		"nba-scores":       &marketdata.NBAScoreNormaliser{},
+		"ncaab-scores":     &marketdata.NCAABScoreNormaliser{},
 	})
 
 	svc, err := marketdata.NewIngestionService(feeds, normaliser, kafkaBrokers, logger)
