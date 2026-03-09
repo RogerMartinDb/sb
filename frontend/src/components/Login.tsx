@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { login } from '../api'
 
 interface Props {
-  onLogin: (token: string) => void
+  onLogin: (token: string, email: string) => void
   onSwitchToRegister: () => void
 }
 
@@ -18,7 +18,7 @@ export default function Login({ onLogin, onSwitchToRegister }: Props) {
     setLoading(true)
     try {
       const token = await login(email, password)
-      onLogin(token)
+      onLogin(token, email)
     } catch {
       setError('Invalid credentials')
     } finally {

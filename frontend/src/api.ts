@@ -79,8 +79,8 @@ export class ApiError extends Error {
 
 let authToken = ''
 
-export function setAuthToken(token: string) {
-  authToken = token
+export function setAuthToken(token: string | null) {
+  authToken = token ?? ''
 }
 
 async function post<T>(path: string, body: unknown, idempotencyKey?: string): Promise<T> {

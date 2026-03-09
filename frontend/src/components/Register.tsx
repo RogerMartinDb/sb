@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { register } from '../api'
 
 interface Props {
-  onRegister: (token: string) => void
+  onRegister: (token: string, email: string) => void
   onSwitchToLogin: () => void
 }
 
@@ -23,7 +23,7 @@ export default function Register({ onRegister, onSwitchToLogin }: Props) {
     setLoading(true)
     try {
       const token = await register(email, password)
-      onRegister(token)
+      onRegister(token, email)
     } catch {
       setError('Registration failed. Email may already be in use.')
     } finally {
