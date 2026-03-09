@@ -26,6 +26,7 @@ type ESPNGame struct {
 			HomeAway string `json:"homeAway"` // "home" or "away"
 			Team     struct {
 				DisplayName string `json:"displayName"` // e.g. "Duke Blue Devils"
+				Location    string `json:"location"`    // e.g. "Duke"
 			} `json:"team"`
 			Score string `json:"score"` // integer as string, e.g. "72"
 		} `json:"competitors"`
@@ -93,10 +94,14 @@ func (f *NCAABScoreFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 
 		var homeTeam, awayTeam string
 		for _, c := range game.Competitions[0].Competitors {
+			name := c.Team.Location
+			if name == "" {
+				name = c.Team.DisplayName
+			}
 			if c.HomeAway == "home" {
-				homeTeam = c.Team.DisplayName
+				homeTeam = name
 			} else {
-				awayTeam = c.Team.DisplayName
+				awayTeam = name
 			}
 		}
 
