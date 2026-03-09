@@ -13,6 +13,12 @@ import (
 
 const gammaBaseURL = "https://gamma-api.polymarket.com"
 
+// Polymarket tag IDs for basketball competitions.
+const (
+	NBATagID   = 745    // NBA
+	NCAABTagID = 28 // Basketball (includes CBB games with "cbb-" slug prefix)
+)
+
 // Event is a Polymarket game event (e.g., "Nets vs. Pistons") from the /events endpoint.
 type Event struct {
 	ID      string   `json:"id"`
@@ -31,7 +37,7 @@ type Market struct {
 	ConditionID      string   `json:"conditionId"`
 	Question         string   `json:"question"`
 	Slug             string   `json:"slug"`
-	GroupItemTitle    *string  `json:"groupItemTitle"` // null for moneyline
+	GroupItemTitle   *string  `json:"groupItemTitle"` // null for moneyline
 	SportsMarketType string   `json:"sportsMarketType"`
 	Line             *float64 `json:"line"`
 	Outcomes         string   `json:"outcomes"`      // JSON string: "[\"A\",\"B\"]"
@@ -84,15 +90,24 @@ func NewClient(logger *slog.Logger) *Client {
 }
 
 // FetchNBAEvents returns active, non-closed NBA game events from Polymarket.
-// Uses tag_id=745 (NBA) with related_tags=true to discover game-level events.
 func (c *Client) FetchNBAEvents(ctx context.Context) ([]Event, error) {
+	return c.FetchEvents(ctx, NBATagID)
+}
+
+// FetchNCAABEvents returns active, non-closed NCAAB game events from Polymarket.
+func (c *Client) FetchNCAABEvents(ctx context.Context) ([]Event, error) {
+	return c.FetchEvents(ctx, NCAABTagID)
+}
+
+// FetchEvents returns active, non-closed events for the given Polymarket tag ID.
+func (c *Client) FetchEvents(ctx context.Context, tagID int) ([]Event, error) {
 	var all []Event
 	offset := 0
 	const limit = 100
 
 	for {
-		url := fmt.Sprintf("%s/events?tag_id=745&related_tags=true&active=true&closed=false&order=startDate&ascending=false&limit=%d&offset=%d",
-			c.baseURL, limit, offset)
+		url := fmt.Sprintf("%s/events?tag_id=%d&related_tags=true&active=true&closed=false&order=startDate&ascending=false&limit=%d&offset=%d",
+			c.baseURL, tagID, limit, offset)
 
 		c.logger.Debug("polymarket: fetching events", "url", url)
 
@@ -126,6 +141,6 @@ func (c *Client) FetchNBAEvents(ctx context.Context) ([]Event, error) {
 		offset += limit
 	}
 
-	c.logger.Info("polymarket: fetched all NBA events", "total", len(all))
+	c.logger.Info("polymarket: fetched events", "tag_id", tagID, "total", len(all))
 	return all, nil
 }

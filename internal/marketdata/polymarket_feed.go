@@ -12,20 +12,37 @@ import (
 
 const polymarketSyncInterval = 5 * time.Minute
 
-// PolymarketFeed implements ProviderFeed by polling the Polymarket Gamma API
-// for NBA game events. Each RawProviderEvent contains one polymarket.Event
-// (a full NBA game with all its markets).
+// PolymarketFeed polls the Polymarket Gamma API for a given sport competition.
+// providerID is used by CompositeNormaliser to select the correct normaliser.
 type PolymarketFeed struct {
 	client       *polymarket.Client
-	eventMatcher *EventMatcher // shared mapping for NBA score matching
+	eventMatcher *EventMatcher // optional; used by NBA score feed for team→event mapping
 	logger       *slog.Logger
+	providerID   string
+	slugPrefix   string
+	tagID        int
 }
 
+// NewPolymarketFeed creates a feed for NBA events (tag 745, slug prefix "nba-").
 func NewPolymarketFeed(eventMatcher *EventMatcher, logger *slog.Logger) *PolymarketFeed {
 	return &PolymarketFeed{
 		client:       polymarket.NewClient(logger),
 		eventMatcher: eventMatcher,
 		logger:       logger,
+		providerID:   "polymarket-nba",
+		slugPrefix:   "nba-",
+		tagID:        polymarket.NBATagID,
+	}
+}
+
+// NewNCAABFeed creates a feed for NCAAB events (tag 101952, slug prefix "ncaab-").
+func NewNCAABFeed(logger *slog.Logger) *PolymarketFeed {
+	return &PolymarketFeed{
+		client:     polymarket.NewClient(logger),
+		logger:     logger,
+		providerID: "polymarket-ncaab",
+		slugPrefix: "cbb-",
+		tagID:      polymarket.NCAABTagID,
 	}
 }
 
@@ -33,7 +50,7 @@ func (f *PolymarketFeed) Subscribe(ctx context.Context) (<-chan RawProviderEvent
 	ch := make(chan RawProviderEvent, 64)
 	go func() {
 		defer close(ch)
-		f.logger.Info("polymarket feed: starting")
+		f.logger.Info("polymarket feed: starting", "provider", f.providerID)
 		f.poll(ctx, ch)
 
 		ticker := time.NewTicker(polymarketSyncInterval)
@@ -51,16 +68,16 @@ func (f *PolymarketFeed) Subscribe(ctx context.Context) (<-chan RawProviderEvent
 }
 
 func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
-	events, err := f.client.FetchNBAEvents(ctx)
+	events, err := f.client.FetchEvents(ctx, f.tagID)
 	if err != nil {
-		f.logger.Error("polymarket feed: fetch failed", "err", err)
+		f.logger.Error("polymarket feed: fetch failed", "provider", f.providerID, "err", err)
 		return
 	}
 
 	now := time.Now().UTC()
 	sent := 0
 	for _, ev := range events {
-		if !strings.HasPrefix(ev.Slug, "nba-") || ev.Closed || !ev.Active {
+		if !strings.HasPrefix(ev.Slug, f.slugPrefix) || ev.Closed || !ev.Active {
 			continue
 		}
 		if !hasSportsMarkets(ev.Markets) {
@@ -73,14 +90,15 @@ func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 			continue
 		}
 
-		// Register event in the shared matcher so the NBA score feed can
-		// map team names to event IDs.
-		eventName := strings.ReplaceAll(ev.Title, " vs. ", " @ ")
-		f.eventMatcher.Register(ev.ID, eventName)
+		// Register in event matcher so score feeds can correlate team names to event IDs.
+		if f.eventMatcher != nil {
+			eventName := strings.ReplaceAll(ev.Title, " vs. ", " @ ")
+			f.eventMatcher.Register(ev.ID, eventName)
+		}
 
 		select {
 		case ch <- RawProviderEvent{
-			ProviderID: "polymarket",
+			ProviderID: f.providerID,
 			Data:       data,
 			ReceivedAt: now,
 		}:
@@ -89,7 +107,7 @@ func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 			return
 		}
 	}
-	f.logger.Info("polymarket feed: poll complete", "events_sent", sent, "events_total", len(events))
+	f.logger.Info("polymarket feed: poll complete", "provider", f.providerID, "events_sent", sent, "events_total", len(events))
 }
 
 func hasSportsMarkets(markets []polymarket.Market) bool {

@@ -12,6 +12,7 @@ export interface SelectedBet {
 
 interface Props {
   onSelectBet: (bet: SelectedBet) => void
+  competitionId?: string | null
 }
 
 function formatAmerican(n: number): string {
@@ -64,7 +65,7 @@ function dateLabel(key: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
 }
 
-export default function EventList({ onSelectBet }: Props) {
+export default function EventList({ onSelectBet, competitionId }: Props) {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -95,8 +96,12 @@ export default function EventList({ onSelectBet }: Props) {
     }
   }, [])
 
+  const visibleEvents = competitionId
+    ? events.filter(ev => ev.competition_id === competitionId)
+    : events
+
   if (loading) return <p style={{ color: C.muted, padding: 12 }}>Loading events…</p>
-  if (events.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
+  if (visibleEvents.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
 
   const COLS: { label: string; type: string }[] = [
     { label: 'Spread', type: 'SPREAD' },
@@ -105,8 +110,8 @@ export default function EventList({ onSelectBet }: Props) {
   ]
 
   // Separate live games from scheduled, then group scheduled by date.
-  const liveEvents = events.filter(ev => ev.status === 'LIVE')
-  const scheduledEvents = events.filter(ev => ev.status !== 'LIVE')
+  const liveEvents = visibleEvents.filter(ev => ev.status === 'LIVE')
+  const scheduledEvents = visibleEvents.filter(ev => ev.status !== 'LIVE')
 
   const groups: { key: string; label: string; evs: Event[] }[] = []
   if (liveEvents.length > 0) {
