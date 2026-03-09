@@ -170,6 +170,14 @@ func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.Consumer
 		return nil
 	}
 
+	for _, sel := range sels {
+		if sel.FeedProbability == 0 {
+			s.logger.Info("odds: feed probability is zero, skipping market",
+				"market_id", event.MarketID, "selection_id", sel.ID)
+			return nil
+		}
+	}
+
 	results := ComputeMarketOdds(sels)
 	for _, r := range results {
 		if r.Decimal == 0 {

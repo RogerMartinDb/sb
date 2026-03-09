@@ -141,9 +141,18 @@ type selRow struct {
 	prob        float64
 }
 
+func clampProb(p float64) float64 {
+	if p > 0.98 || p < 0.02 {
+		return 0
+	}
+	return p
+}
+
 func buildSelections(marketType string, outcomes, prices []string, line *float64) []selRow {
 	p0, _ := strconv.ParseFloat(prices[0], 64)
 	p1, _ := strconv.ParseFloat(prices[1], 64)
+	p0 = clampProb(p0)
+	p1 = clampProb(p1)
 
 	switch marketType {
 	case "ML":
