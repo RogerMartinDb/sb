@@ -127,6 +127,146 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
     }
   }
 
+  function isBinaryEvent(ev: Event): boolean {
+    return ev.markets.length > 0 && ev.markets.every(m => m.market_type === 'BINARY')
+  }
+
+  function renderBinaryEvent(ev: Event) {
+    // Sort markets by closest deadline first (closes_at approximated by starts_at).
+    const markets = [...ev.markets].sort((a, b) => {
+      const aMain = a.is_main ? 0 : 1
+      const bMain = b.is_main ? 0 : 1
+      return aMain - bMain
+    })
+
+    return (
+      <div key={ev.event_id} style={{
+        background: C.card,
+        border: `1px solid ${C.border}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+      }}>
+        {/* Event header */}
+        <div style={{
+          background: C.cardHeader,
+          padding: '10px 14px',
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</span>
+        </div>
+
+        {/* One row per market */}
+        {markets.map((market, mi) => {
+          const yesSel = market.selections.find(s => s.name === 'Yes')
+          const noSel = market.selections.find(s => s.name === 'No')
+          if (!yesSel || !noSel) return null
+
+          const yesDisabled = yesSel.odds_decimal <= 0
+          const noDisabled = noSel.odds_decimal <= 0
+          const yesActive = selectedId === yesSel.selection_id
+          const noActive = selectedId === noSel.selection_id
+
+          // Extract deadline from market name or use market name as-is.
+          const label = market.name
+
+          return (
+            <div key={market.market_id} style={{
+              borderBottom: mi < markets.length - 1 ? `1px solid ${C.border}` : 'none',
+              padding: '8px 14px',
+              display: 'grid',
+              gridTemplateColumns: '1fr 80px 80px',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{
+                fontSize: 12,
+                color: C.muted,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {label}
+              </span>
+              {/* Yes button */}
+              <button
+                disabled={yesDisabled}
+                onClick={() => {
+                  setSelectedId(yesSel.selection_id)
+                  onSelectBet({
+                    market_id: market.market_id,
+                    market_name: market.name,
+                    selection_id: yesSel.selection_id,
+                    selection_name: 'Yes',
+                    odds_decimal: yesSel.odds_decimal,
+                    odds_american: yesSel.odds_american,
+                  })
+                }}
+                style={{
+                  padding: '6px 4px',
+                  border: yesActive
+                    ? `1.5px solid ${C.gold}`
+                    : `1px solid ${yesDisabled ? 'transparent' : C.btnBorder}`,
+                  borderRadius: 6,
+                  background: yesActive ? C.selBg : (yesDisabled ? 'transparent' : C.btnBg),
+                  cursor: yesDisabled ? 'default' : 'pointer',
+                  textAlign: 'center',
+                }}
+              >
+                {!yesDisabled ? (
+                  <>
+                    <div style={{ fontSize: 9, color: yesActive ? C.selText : '#27ae60', fontWeight: 700, marginBottom: 1 }}>YES</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: yesActive ? C.selText : C.btnOdds }}>
+                      {formatAmerican(yesSel.odds_american)}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: C.border }}>—</div>
+                )}
+              </button>
+              {/* No button */}
+              <button
+                disabled={noDisabled}
+                onClick={() => {
+                  setSelectedId(noSel.selection_id)
+                  onSelectBet({
+                    market_id: market.market_id,
+                    market_name: market.name,
+                    selection_id: noSel.selection_id,
+                    selection_name: 'No',
+                    odds_decimal: noSel.odds_decimal,
+                    odds_american: noSel.odds_american,
+                  })
+                }}
+                style={{
+                  padding: '6px 4px',
+                  border: noActive
+                    ? `1.5px solid ${C.gold}`
+                    : `1px solid ${noDisabled ? 'transparent' : C.btnBorder}`,
+                  borderRadius: 6,
+                  background: noActive ? C.selBg : (noDisabled ? 'transparent' : C.btnBg),
+                  cursor: noDisabled ? 'default' : 'pointer',
+                  textAlign: 'center',
+                }}
+              >
+                {!noDisabled ? (
+                  <>
+                    <div style={{ fontSize: 9, color: noActive ? C.selText : C.live, fontWeight: 700, marginBottom: 1 }}>NO</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: noActive ? C.selText : C.btnOdds }}>
+                      {formatAmerican(noSel.odds_american)}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: C.border }}>—</div>
+                )}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {groups.map(({ key, label, evs }) => {
@@ -170,7 +310,7 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
               {label}
             </span>
             <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>
-              {evs.length} {evs.length === 1 ? 'game' : 'games'}
+              {evs.length} {evs.length === 1 ? 'event' : 'events'}
             </span>
             <div style={{ flex: 1, height: 1, background: C.border }} />
             <span style={{
@@ -186,6 +326,8 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
           {!isCollapsed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 6 }}>
       {evs.map(ev => {
+        if (isBinaryEvent(ev)) return renderBinaryEvent(ev)
+
         const mainMarkets = ev.markets.filter(m => m.is_main)
         const byType = Object.fromEntries(
           COLS.map(c => [c.type, mainMarkets.find((m: Market) => m.market_type === c.type)])

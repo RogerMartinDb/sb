@@ -21,6 +21,7 @@ type PolymarketFeed struct {
 	providerID   string
 	slugPrefix   string
 	tagID        int
+	binaryMode   bool // when true, accept events without sportsMarketType (yes/no binary markets)
 }
 
 // NewPolymarketFeed creates a feed for NBA events (tag 745, slug prefix "nba-").
@@ -32,6 +33,17 @@ func NewPolymarketFeed(eventMatcher *EventMatcher, logger *slog.Logger) *Polymar
 		providerID:   "polymarket-nba",
 		slugPrefix:   "nba-",
 		tagID:        polymarket.NBATagID,
+	}
+}
+
+// NewIranFeed creates a feed for Iran political events (tag 78, binary mode).
+func NewIranFeed(logger *slog.Logger) *PolymarketFeed {
+	return &PolymarketFeed{
+		client:     polymarket.NewClient(logger),
+		logger:     logger,
+		providerID: "polymarket-iran",
+		tagID:      polymarket.IranTagID,
+		binaryMode: true,
 	}
 }
 
@@ -77,10 +89,17 @@ func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 	now := time.Now().UTC()
 	sent := 0
 	for _, ev := range events {
-		if !strings.HasPrefix(ev.Slug, f.slugPrefix) || ev.Closed || !ev.Active {
+		if ev.Closed || !ev.Active {
 			continue
 		}
-		if !hasSportsMarkets(ev.Markets) {
+		if f.slugPrefix != "" && !strings.HasPrefix(ev.Slug, f.slugPrefix) {
+			continue
+		}
+		if f.binaryMode {
+			if !hasBinaryMarkets(ev.Markets) {
+				continue
+			}
+		} else if !hasSportsMarkets(ev.Markets) {
 			continue
 		}
 
@@ -113,6 +132,15 @@ func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 func hasSportsMarkets(markets []polymarket.Market) bool {
 	for _, m := range markets {
 		if _, ok := allowedTypes[m.SportsMarketType]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func hasBinaryMarkets(markets []polymarket.Market) bool {
+	for _, m := range markets {
+		if !m.Closed && m.Active && m.SportsMarketType == "" {
 			return true
 		}
 	}

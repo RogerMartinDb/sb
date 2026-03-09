@@ -17,6 +17,7 @@ const gammaBaseURL = "https://gamma-api.polymarket.com"
 const (
 	NBATagID   = 745    // NBA
 	NCAABTagID = 28 // Basketball (includes CBB games with "cbb-" slug prefix)
+	IranTagID  = 78 // Iran
 )
 
 // Event is a Polymarket game event (e.g., "Nets vs. Pistons") from the /events endpoint.
@@ -44,6 +45,7 @@ type Market struct {
 	OutcomePrices    string   `json:"outcomePrices"` // JSON string: "[\"0.55\",\"0.45\"]"
 	ClobTokenIDs     string   `json:"clobTokenIds"`  // JSON string
 	GameStartTime    string   `json:"gameStartTime"`
+	EndDate          string   `json:"endDate"`
 	Active           bool     `json:"active"`
 	Closed           bool     `json:"closed"`
 }

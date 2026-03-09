@@ -39,6 +39,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		marketdata.NewSportradarFeed(sportradarURL, sportradarKey, logger),
 		marketdata.NewPolymarketFeed(eventMatcher, logger),
 		marketdata.NewNCAABFeed(logger),
+		marketdata.NewIranFeed(logger),
 		marketdata.NewNBAScoreFeed(eventMatcher, logger),
 	}
 
@@ -46,6 +47,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		"sportradar":       &marketdata.SportradarNormaliser{},
 		"polymarket-nba":   marketdata.NewPolymarketNormaliser("nba", "NBA"),
 		"polymarket-ncaab": marketdata.NewPolymarketNormaliser("ncaab", "NCAAB"),
+		"polymarket-iran":  marketdata.NewPoliticsNormaliser("politics", "Politics", "iran", "Iran", "IR"),
 		"nba-scores":       &marketdata.NBAScoreNormaliser{},
 	})
 

@@ -19,7 +19,7 @@ export interface Market {
   market_id: string
   name: string
   status: string
-  market_type: string // "ML" | "SPREAD" | "TOTAL"
+  market_type: string // "ML" | "SPREAD" | "TOTAL" | "BINARY"
   target_value: number
   is_main: boolean
   selections: Selection[]
