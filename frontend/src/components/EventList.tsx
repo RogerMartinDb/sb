@@ -13,6 +13,7 @@ export interface SelectedBet {
 interface Props {
   onSelectBet: (bet: SelectedBet) => void
   competitionId?: string | null
+  groupByDate?: boolean
 }
 
 function formatAmerican(n: number): string {
@@ -65,7 +66,7 @@ function dateLabel(key: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
 }
 
-export default function EventList({ onSelectBet, competitionId }: Props) {
+export default function EventList({ onSelectBet, competitionId, groupByDate = true }: Props) {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -109,7 +110,7 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
     { label: 'Total',  type: 'TOTAL' },
   ]
 
-  // Separate live games from scheduled, then group scheduled by date.
+  // Separate live games from scheduled, then group scheduled by date (unless groupByDate is false).
   const liveEvents = visibleEvents.filter(ev => ev.status === 'LIVE')
   const scheduledEvents = visibleEvents.filter(ev => ev.status !== 'LIVE')
 
@@ -117,13 +118,19 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
   if (liveEvents.length > 0) {
     groups.push({ key: '_live', label: 'LIVE', evs: liveEvents })
   }
-  for (const ev of scheduledEvents) {
-    const k = dateKey(ev.starts_at)
-    const last = groups[groups.length - 1]
-    if (last && last.key === k) {
-      last.evs.push(ev)
-    } else {
-      groups.push({ key: k, label: dateLabel(k), evs: [ev] })
+  if (groupByDate) {
+    for (const ev of scheduledEvents) {
+      const k = dateKey(ev.starts_at)
+      const last = groups[groups.length - 1]
+      if (last && last.key === k) {
+        last.evs.push(ev)
+      } else {
+        groups.push({ key: k, label: dateLabel(k), evs: [ev] })
+      }
+    }
+  } else {
+    if (scheduledEvents.length > 0) {
+      groups.push({ key: '_all', label: '', evs: scheduledEvents })
     }
   }
 
@@ -272,10 +279,11 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
       {groups.map(({ key, label, evs }) => {
         const isCollapsed = collapsed[key] ?? false
         const isLiveGroup = key === '_live'
+        const isUngrouped = key === '_all'
         return (
         <div key={key}>
           {/* Section header */}
-          <button
+          {isUngrouped ? null : <button
             onClick={() => setCollapsed(prev => ({ ...prev, [key]: !isCollapsed }))}
             style={{
               display: 'flex',
@@ -321,9 +329,9 @@ export default function EventList({ onSelectBet, competitionId }: Props) {
               transition: 'transform 0.2s',
               display: 'inline-block',
             }}>▼</span>
-          </button>
+          </button>}
 
-          {!isCollapsed && (
+          {(!isCollapsed || isUngrouped) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 6 }}>
       {evs.map(ev => {
         if (isBinaryEvent(ev)) return renderBinaryEvent(ev)

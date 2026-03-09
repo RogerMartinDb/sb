@@ -188,7 +188,11 @@ export default function App() {
         <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
           <LeftMenu selected={competitionFilter} onSelect={setCompetitionFilter} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <EventList onSelectBet={setSelectedBet} competitionId={competitionFilter} />
+            <EventList
+              onSelectBet={setSelectedBet}
+              competitionId={competitionFilter}
+              groupByDate={!SPORTS.find(s => s.id === 'politics')?.competitions.some(c => c.id === competitionFilter)}
+            />
             {selectedBet && (
               <div style={{ marginTop: 16 }}>
                 <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} />
