@@ -72,12 +72,12 @@ func TestComputeMarketOdds_Basic(t *testing.T) {
 		{ID: "sel-0", FeedProbability: 0.55},
 		{ID: "sel-1", FeedProbability: 0.45},
 	}
-	results := ComputeMarketOdds(sels)
+	results := ComputeMarketOdds(sels, vigDelta)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
 
-	// With a fixed vigDelta applied, each vigged prob should equal
+	// With vigDelta applied, each vigged prob should equal
 	// sigmoid(logit(fairProb) + vigDelta). Fair probs here are 0.55 and 0.45.
 	fairProbs := [2]float64{0.55, 0.45}
 	for i, r := range results {
@@ -100,7 +100,7 @@ func TestComputeMarketOdds_EvenMoney_Spread(t *testing.T) {
 		{ID: "sel-0", FeedProbability: 0.5},
 		{ID: "sel-1", FeedProbability: 0.5},
 	}
-	results := ComputeMarketOdds(sels)
+	results := ComputeMarketOdds(sels, vigDelta)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
@@ -118,7 +118,7 @@ func TestComputeMarketOdds_ZeroWhenViggedBelowFeed(t *testing.T) {
 		{ID: "sel-0", FeedProbability: 0.55},
 		{ID: "sel-1", FeedProbability: 0.55},
 	}
-	results := ComputeMarketOdds(sels)
+	results := ComputeMarketOdds(sels, vigDelta)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
@@ -142,7 +142,7 @@ func TestComputeMarketOdds_FeedSumsToOne(t *testing.T) {
 		{ID: "sel-0", FeedProbability: 0.6},
 		{ID: "sel-1", FeedProbability: 0.4},
 	}
-	results := ComputeMarketOdds(sels)
+	results := ComputeMarketOdds(sels, vigDelta)
 	for _, r := range results {
 		if r.Decimal == 0 {
 			t.Errorf("selection %s: unexpected zero price", r.ID)
@@ -150,6 +150,23 @@ func TestComputeMarketOdds_FeedSumsToOne(t *testing.T) {
 		if r.ViggedProb <= r.FeedProbability {
 			t.Errorf("selection %s: vigged=%.6f should be > feed=%.4f",
 				r.ID, r.ViggedProb, r.FeedProbability)
+		}
+	}
+}
+
+func TestComputeMarketOdds_WideVig_EvenMoney(t *testing.T) {
+	// 30-cent line: at 50/50 should produce -115/-115.
+	sels := []SelectionInput{
+		{ID: "sel-0", FeedProbability: 0.5},
+		{ID: "sel-1", FeedProbability: 0.5},
+	}
+	results := ComputeMarketOdds(sels, vigDeltaWide)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for _, r := range results {
+		if r.American != -115 {
+			t.Errorf("selection %s: got American %d, want -115", r.ID, r.American)
 		}
 	}
 }

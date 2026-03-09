@@ -128,7 +128,11 @@ func (s *Service) handleEvent(ctx context.Context, msg *sarama.ConsumerMessage) 
 
 // handleNormalisedFeed processes external price signals. It fetches feed
 // probabilities for all selections in the market from the catalog DB,
-// computes vigged odds using a fixed logit vig (calibrated to -110/-110 at even money),
+// computes vigged odds using a logit vig, and publishes odds.updated.
+//
+// Vig schedule:
+//   - Live basketball and politics: 30-cent line (-115/-115 at even money)
+//   - All other markets:            20-cent line (-110/-110 at even money)
 func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	var event struct {
 		EventType string `json:"event_type"`
@@ -141,11 +145,19 @@ func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.Consumer
 		return nil
 	}
 
-	// Fetch selections with feed probabilities from catalog DB.
+	// Fetch selections with feed probabilities, plus the sport_id and event
+	// status needed to choose the vig schedule.
 	rows, err := s.catalogDB.Query(ctx,
-		`SELECT selection_id, feed_probability FROM selections
-		 WHERE market_id = $1 AND active = true AND feed_probability IS NOT NULL
-		 ORDER BY selection_id`,
+		`SELECT sel.selection_id, sel.feed_probability, sp.sport_id, ev.status
+		 FROM selections sel
+		 JOIN markets  mkt ON mkt.market_id    = sel.market_id
+		 JOIN events   ev  ON ev.event_id      = mkt.event_id
+		 JOIN competitions comp ON comp.competition_id = ev.competition_id
+		 JOIN sports   sp  ON sp.sport_id      = comp.sport_id
+		 WHERE sel.market_id = $1
+		   AND sel.active = true
+		   AND sel.feed_probability IS NOT NULL
+		 ORDER BY sel.selection_id`,
 		event.MarketID)
 	if err != nil {
 		return fmt.Errorf("fetch selections: %w", err)
@@ -153,9 +165,10 @@ func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.Consumer
 	defer rows.Close()
 
 	var sels []SelectionInput
+	var sportID, eventStatus string
 	for rows.Next() {
 		var si SelectionInput
-		if err := rows.Scan(&si.ID, &si.FeedProbability); err != nil {
+		if err := rows.Scan(&si.ID, &si.FeedProbability, &sportID, &eventStatus); err != nil {
 			return fmt.Errorf("scan selection: %w", err)
 		}
 		sels = append(sels, si)
@@ -178,7 +191,13 @@ func (s *Service) handleNormalisedFeed(ctx context.Context, msg *sarama.Consumer
 		}
 	}
 
-	results := ComputeMarketOdds(sels)
+	// Choose vig: wide (30-cent) for live basketball and all politics markets.
+	delta := vigDelta
+	if sportID == "politics" || (sportID == "basketball" && eventStatus == "LIVE") {
+		delta = vigDeltaWide
+	}
+
+	results := ComputeMarketOdds(sels, delta)
 	for _, r := range results {
 		if r.Decimal == 0 {
 			s.logger.Warn("odds: vigged prob < feed prob, price zeroed",
@@ -288,24 +307,29 @@ type SelectionResult struct {
 	American        int     // 0 if zeroed out
 }
 
-// vigDelta is the logit shift that applies a -110/-110 vig to a 50-50 market.
+// vigDelta is the logit shift that applies a -110/-110 vig to a 50-50 market
+// (standard 20-cent line).
 //
 // Derivation: -110 American → decimal 210/110 → implied prob 110/210 = 11/21.
 // sigmoid(logit(0.5) + δ) = 11/21  ⟹  δ = logit(11/21) = ln(1.1).
-//
-// This constant vig is then applied uniformly to all markets regardless of
-// the true probability split, so the book margin is consistent.
 var vigDelta = math.Log(1.1)
+
+// vigDeltaWide is the logit shift that applies a -115/-115 vig to a 50-50
+// market (30-cent line). Used for live basketball and politics markets.
+//
+// Derivation: -115 American → decimal 215/115 → implied prob 115/215.
+// sigmoid(logit(0.5) + δ) = 115/215  ⟹  δ = logit(115/100) = ln(1.15).
+var vigDeltaWide = math.Log(1.15)
 
 // ComputeMarketOdds computes vigged odds for a binary market using logit vig.
 //
 // Steps:
 //  1. Normalise feed probabilities to fair probabilities (sum to 1).
-//  2. Apply a fixed logit shift δ = ln(1.1), calibrated so that a 50-50
-//     market produces -110 / -110 (a standard 20-cent line at even money).
+//  2. Apply a fixed logit shift δ (caller-supplied), calibrated so that a
+//     50-50 market produces symmetric juice at the chosen line width.
 //  3. If a selection's vigged implied probability is lower than its original
 //     feed probability, its price is set to zero.
-func ComputeMarketOdds(sels []SelectionInput) []SelectionResult {
+func ComputeMarketOdds(sels []SelectionInput, delta float64) []SelectionResult {
 	if len(sels) != 2 {
 		return nil
 	}
@@ -324,8 +348,6 @@ func ComputeMarketOdds(sels []SelectionInput) []SelectionResult {
 	const eps = 1e-6
 	p0 = clamp(p0, eps, 1-eps)
 	p1 = clamp(p1, eps, 1-eps)
-
-	delta := vigDelta
 
 	results := make([]SelectionResult, 2)
 	fairProbs := [2]float64{p0, p1}
