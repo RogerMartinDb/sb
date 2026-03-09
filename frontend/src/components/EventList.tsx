@@ -97,9 +97,16 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
     }
   }, [])
 
-  const visibleEvents = competitionId
+  const BASKETBALL_IDS = new Set(['nba', 'ncaab'])
+
+  const visibleEvents = (competitionId
     ? events.filter(ev => ev.competition_id === competitionId)
     : events
+  ).filter(ev => {
+    if (!BASKETBALL_IDS.has(ev.competition_id)) return true
+    const mainMarkets = ev.markets.filter(m => m.is_main)
+    return mainMarkets.some(m => m.selections.some(s => s.odds_decimal > 0))
+  })
 
   if (loading) return <p style={{ color: C.muted, padding: 12 }}>Loading events…</p>
   if (visibleEvents.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
