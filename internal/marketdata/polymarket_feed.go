@@ -15,24 +15,26 @@ const polymarketSyncInterval = 5 * time.Minute
 // PolymarketFeed polls the Polymarket Gamma API for a given sport competition.
 // providerID is used by CompositeNormaliser to select the correct normaliser.
 type PolymarketFeed struct {
-	client       *polymarket.Client
-	eventMatcher *EventMatcher // optional; used by NBA score feed for team→event mapping
-	logger       *slog.Logger
-	providerID   string
-	slugPrefix   string
-	tagID        int
-	binaryMode   bool // when true, accept events without sportsMarketType (yes/no binary markets)
+	client        *polymarket.Client
+	eventMatcher  *EventMatcher  // optional; used by NBA score feed for team→event mapping
+	tokenRegistry *TokenRegistry // optional; populated with CLOB token IDs for WS price feed
+	logger        *slog.Logger
+	providerID    string
+	slugPrefix    string
+	tagID         int
+	binaryMode    bool // when true, accept events without sportsMarketType (yes/no binary markets)
 }
 
 // NewPolymarketFeed creates a feed for NBA events (tag 745, slug prefix "nba-").
-func NewPolymarketFeed(eventMatcher *EventMatcher, logger *slog.Logger) *PolymarketFeed {
+func NewPolymarketFeed(eventMatcher *EventMatcher, tokenRegistry *TokenRegistry, logger *slog.Logger) *PolymarketFeed {
 	return &PolymarketFeed{
-		client:       polymarket.NewClient(logger),
-		eventMatcher: eventMatcher,
-		logger:       logger,
-		providerID:   "polymarket-nba",
-		slugPrefix:   "nba-",
-		tagID:        polymarket.NBATagID,
+		client:        polymarket.NewClient(logger),
+		eventMatcher:  eventMatcher,
+		tokenRegistry: tokenRegistry,
+		logger:        logger,
+		providerID:    "polymarket-nba",
+		slugPrefix:    "nba-",
+		tagID:         polymarket.NBATagID,
 	}
 }
 
@@ -48,14 +50,15 @@ func NewIranFeed(logger *slog.Logger) *PolymarketFeed {
 }
 
 // NewNCAABFeed creates a feed for NCAAB events (tag 28, slug prefix "cbb-").
-func NewNCAABFeed(eventMatcher *EventMatcher, logger *slog.Logger) *PolymarketFeed {
+func NewNCAABFeed(eventMatcher *EventMatcher, tokenRegistry *TokenRegistry, logger *slog.Logger) *PolymarketFeed {
 	return &PolymarketFeed{
-		client:       polymarket.NewClient(logger),
-		eventMatcher: eventMatcher,
-		logger:       logger,
-		providerID:   "polymarket-ncaab",
-		slugPrefix:   "cbb-",
-		tagID:        polymarket.NCAABTagID,
+		client:        polymarket.NewClient(logger),
+		eventMatcher:  eventMatcher,
+		tokenRegistry: tokenRegistry,
+		logger:        logger,
+		providerID:    "polymarket-ncaab",
+		slugPrefix:    "cbb-",
+		tagID:         polymarket.NCAABTagID,
 	}
 }
 
@@ -114,6 +117,26 @@ func (f *PolymarketFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 		if f.eventMatcher != nil {
 			eventName := strings.ReplaceAll(ev.Title, " vs. ", " @ ")
 			f.eventMatcher.Register(ev.ID, eventName)
+		}
+
+		// Register CLOB token IDs for the WS price feed.
+		if f.tokenRegistry != nil {
+			for _, m := range ev.Markets {
+				tokenIDs, err := m.ParseClobTokenIDs()
+				if err != nil || len(tokenIDs) == 0 {
+					continue
+				}
+				var entries []TokenEntry
+				for i, tid := range tokenIDs {
+					entries = append(entries, TokenEntry{
+						TokenID:     tid,
+						ConditionID: m.ConditionID,
+						SelIndex:    i,
+						ProviderID:  f.providerID,
+					})
+				}
+				f.tokenRegistry.Register(entries)
+			}
 		}
 
 		select {

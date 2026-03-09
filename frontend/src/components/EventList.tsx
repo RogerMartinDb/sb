@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getEvents, type Event, type Market, type Selection } from '../api'
+import { type Event, type Market, type Selection } from '../api'
+import { useEventsWS } from '../hooks/useEventsWS'
 
 export interface SelectedBet {
   market_id: string
@@ -67,24 +68,10 @@ function dateLabel(key: string): string {
 }
 
 export default function EventList({ onSelectBet, competitionId, groupByDate = true }: Props) {
-  const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
+  const { events, loading } = useEventsWS()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [altOpen, setAltOpen] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    let active = true
-    const load = () => {
-      getEvents()
-        .then(data => { if (active) setEvents(data ?? []) })
-        .catch(() => {})
-        .finally(() => { if (active) setLoading(false) })
-    }
-    load()
-    const interval = setInterval(load, 30_000)
-    return () => { active = false; clearInterval(interval) }
-  }, [])
 
   useEffect(() => {
     // Inject pulse animation for live indicator.

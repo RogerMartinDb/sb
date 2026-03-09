@@ -13,7 +13,9 @@ import (
 )
 
 // ConsumeNormalisedFeed consumes market-data.normalised and upserts catalog data.
-func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Pool, logger *slog.Logger) error {
+// When a Broadcaster is provided (non-nil), game.state updates are broadcast to
+// WebSocket clients after being persisted.
+func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Pool, broadcaster *Broadcaster, logger *slog.Logger) error {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V3_6_0_0
 	cfg.Consumer.Offsets.AutoCommit.Enable = true
@@ -25,7 +27,7 @@ func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Po
 	}
 	defer cg.Close()
 
-	handler := &catalogFeedHandler{db: db, logger: logger}
+	handler := &catalogFeedHandler{db: db, broadcaster: broadcaster, logger: logger}
 	for {
 		if err := cg.Consume(ctx, []string{"market-data.normalised"}, handler); err != nil {
 			if ctx.Err() != nil {
@@ -40,8 +42,9 @@ func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Po
 }
 
 type catalogFeedHandler struct {
-	db     *pgxpool.Pool
-	logger *slog.Logger
+	db          *pgxpool.Pool
+	broadcaster *Broadcaster
+	logger      *slog.Logger
 }
 
 func (h *catalogFeedHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
@@ -67,6 +70,8 @@ func (h *catalogFeedHandler) ConsumeClaim(session sarama.ConsumerGroupSession, c
 			if err := h.handleGameState(ctx, &event); err != nil {
 				h.logger.Error("catalog consumer: game state update failed",
 					"event_id", event.EventID, "err", err)
+			} else if h.broadcaster != nil {
+				h.broadcastScoreUpdate(&event)
 			}
 		case "price.update":
 			// Handled by odds management consumer group, not us.
@@ -175,4 +180,32 @@ func (h *catalogFeedHandler) handleGameState(ctx context.Context, e *marketdata.
 		e.EventStatus,
 	)
 	return err
+}
+
+// broadcastScoreUpdate sends a score_update message to all WebSocket clients.
+func (h *catalogFeedHandler) broadcastScoreUpdate(e *marketdata.NormalisedMarketEvent) {
+	msg := struct {
+		Type       string `json:"type"`
+		EventID    string `json:"event_id"`
+		HomeScore  int    `json:"home_score"`
+		AwayScore  int    `json:"away_score"`
+		GamePeriod string `json:"game_period"`
+		GameClock  string `json:"game_clock"`
+		Status     string `json:"status"`
+	}{
+		Type:       "score_update",
+		EventID:    e.EventID,
+		HomeScore:  e.HomeScore,
+		AwayScore:  e.AwayScore,
+		GamePeriod: e.GamePeriod,
+		GameClock:  e.GameClock,
+		Status:     e.EventStatus,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		h.logger.Error("catalog consumer: marshal score update failed", "err", err)
+		return
+	}
+	h.broadcaster.Broadcast(data)
 }

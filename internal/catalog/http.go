@@ -7,24 +7,31 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
 // HTTPHandler serves the catalog REST API.
 type HTTPHandler struct {
-	db        *pgxpool.Pool
-	redisOdds *redis.Client // redis-odds on port 6380
-	logger    *slog.Logger
+	db          *pgxpool.Pool
+	redisOdds   *redis.Client // redis-odds on port 6380
+	broadcaster *Broadcaster
+	logger      *slog.Logger
 }
 
-func NewHTTPHandler(db *pgxpool.Pool, redisOdds *redis.Client, logger *slog.Logger) *HTTPHandler {
-	return &HTTPHandler{db: db, redisOdds: redisOdds, logger: logger}
+func NewHTTPHandler(db *pgxpool.Pool, redisOdds *redis.Client, broadcaster *Broadcaster, logger *slog.Logger) *HTTPHandler {
+	return &HTTPHandler{db: db, redisOdds: redisOdds, broadcaster: broadcaster, logger: logger}
+}
+
+var wsUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 func (h *HTTPHandler) Mux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /events", h.handleGetEvents)
+	mux.HandleFunc("GET /ws", h.handleWS)
 	return mux
 }
 
@@ -64,8 +71,61 @@ type selectionResp struct {
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	events, err := h.buildEventsSnapshot(r.Context())
+	if err != nil {
+		h.logger.Error("http: build events snapshot failed", "err", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(events)
+}
+
+// handleWS upgrades to WebSocket, sends a snapshot, then reads until disconnect.
+func (h *HTTPHandler) handleWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		h.logger.Error("ws: upgrade failed", "err", err)
+		return
+	}
+
+	// Send initial snapshot.
+	events, err := h.buildEventsSnapshot(r.Context())
+	if err != nil {
+		h.logger.Error("ws: build snapshot failed", "err", err)
+		conn.Close()
+		return
+	}
+
+	snapshot := struct {
+		Type   string      `json:"type"`
+		Events []eventResp `json:"events"`
+	}{
+		Type:   "snapshot",
+		Events: events,
+	}
+	if err := conn.WriteJSON(snapshot); err != nil {
+		h.logger.Error("ws: send snapshot failed", "err", err)
+		conn.Close()
+		return
+	}
+
+	// Register with broadcaster for live updates.
+	h.broadcaster.AddClient(conn)
+
+	// Read loop: just detect disconnects.
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
+
+	h.broadcaster.RemoveClient(conn)
+}
+
+// buildEventsSnapshot queries the DB and Redis to produce the full events list.
+func (h *HTTPHandler) buildEventsSnapshot(ctx context.Context) ([]eventResp, error) {
 	rows, err := h.db.Query(ctx, `
 		SELECT
 			e.event_id, e.competition_id, e.name, e.starts_at::text, e.status,
@@ -82,9 +142,7 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 		    CASE e.status WHEN 'LIVE' THEN 0 ELSE 1 END,
 		    e.starts_at, e.event_id, m.is_main DESC, m.market_type, m.target_value, s.selection_id`)
 	if err != nil {
-		h.logger.Error("http: query events failed", "err", err)
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("query events: %w", err)
 	}
 	defer rows.Close()
 
@@ -176,9 +234,7 @@ func (h *HTTPHandler) handleGetEvents(w http.ResponseWriter, r *http.Request) {
 	for _, eID := range eventOrder {
 		result = append(result, *eventMap[eID])
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	return result, nil
 }
 
 type selKey struct{ marketID, selectionID string }

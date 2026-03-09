@@ -17,6 +17,7 @@ export default defineConfig({
       '/catalog-api': {
         target: 'http://localhost:8086',
         rewrite: path => path.replace(/^\/catalog-api/, ''),
+        ws: true,
       },
       '/history-api': {
         target: 'http://localhost:8082',

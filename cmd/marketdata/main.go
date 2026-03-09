@@ -32,25 +32,34 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	sportradarURL := envOr("SPORTRADAR_API_URL", "https://api.sportradar.com")
 	sportradarKey := envOr("SPORTRADAR_API_KEY", "")
 
-	// Shared event matcher: populated by Polymarket feed, consumed by NBA score feed.
+	// Shared event matcher: populated by Polymarket feed, consumed by score feeds.
 	eventMatcher := marketdata.NewEventMatcher()
+
+	// Token registry: populated by Polymarket Gamma feeds, consumed by WS price feed.
+	tokenRegistry := marketdata.NewTokenRegistry()
 
 	feeds := []marketdata.ProviderFeed{
 		marketdata.NewSportradarFeed(sportradarURL, sportradarKey, logger),
-		marketdata.NewPolymarketFeed(eventMatcher, logger),
-		marketdata.NewNCAABFeed(eventMatcher, logger),
+		marketdata.NewPolymarketFeed(eventMatcher, tokenRegistry, logger),
+		marketdata.NewNCAABFeed(eventMatcher, tokenRegistry, logger),
 		marketdata.NewIranFeed(logger),
+		// REST polling score feeds (fallback).
 		marketdata.NewNBAScoreFeed(eventMatcher, logger),
 		marketdata.NewNCAABScoreFeed(eventMatcher, logger),
+		// WebSocket streaming feeds.
+		marketdata.NewPolymarketPriceFeed(tokenRegistry, logger),
+		marketdata.NewPolymarketScoreFeed(eventMatcher, logger),
 	}
 
 	normaliser := marketdata.NewCompositeNormaliser(map[string]marketdata.Normaliser{
-		"sportradar":       &marketdata.SportradarNormaliser{},
-		"polymarket-nba":   marketdata.NewPolymarketNormaliser("nba", "NBA"),
-		"polymarket-ncaab": marketdata.NewPolymarketNormaliser("ncaab", "NCAAB"),
-		"polymarket-iran":  marketdata.NewPoliticsNormaliser("politics", "Politics", "iran", "Iran", "IR"),
-		"nba-scores":       &marketdata.NBAScoreNormaliser{},
-		"ncaab-scores":     &marketdata.NCAABScoreNormaliser{},
+		"sportradar":          &marketdata.SportradarNormaliser{},
+		"polymarket-nba":      marketdata.NewPolymarketNormaliser("nba", "NBA"),
+		"polymarket-ncaab":    marketdata.NewPolymarketNormaliser("ncaab", "NCAAB"),
+		"polymarket-iran":     marketdata.NewPoliticsNormaliser("politics", "Politics", "iran", "Iran", "IR"),
+		"nba-scores":          &marketdata.NBAScoreNormaliser{},
+		"ncaab-scores":        &marketdata.NCAABScoreNormaliser{},
+		"polymarket-ws-price": &marketdata.PolymarketWSPriceNormaliser{},
+		"polymarket-scores":   &marketdata.PolymarketScoreNormaliser{},
 	})
 
 	svc, err := marketdata.NewIngestionService(feeds, normaliser, kafkaBrokers, logger)

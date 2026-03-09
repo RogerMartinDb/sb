@@ -51,19 +51,30 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	grpcServer := grpc.NewServer()
 	sbv1.RegisterCatalogServiceServer(grpcServer, svc)
 
+	// Create WebSocket broadcaster shared by consumers and HTTP handler.
+	broadcaster := catalog.NewBroadcaster(logger)
+
 	// Run Kafka consumer in background — handles catalog.upsert, game.state
 	// events from market-data.normalised (published by the marketdata service).
+	// Game state updates are broadcast to WebSocket clients.
 	go func() {
-		if err := catalog.ConsumeNormalisedFeed(ctx, kafkaBrokers, db, logger); err != nil {
+		if err := catalog.ConsumeNormalisedFeed(ctx, kafkaBrokers, db, broadcaster, logger); err != nil {
 			logger.Error("catalog feed consumer error", "err", err)
+		}
+	}()
+
+	// Run odds.updated consumer — broadcasts odds changes to WebSocket clients.
+	go func() {
+		if err := catalog.ConsumeOddsUpdates(ctx, kafkaBrokers, broadcaster, logger); err != nil {
+			logger.Error("odds ws consumer error", "err", err)
 		}
 	}()
 
 	// Run status cache warmer in background.
 	go catalog.NewStatusCacheWarmer(db, redisMarket, logger).Run(ctx)
 
-	// Start HTTP server for /events endpoint.
-	httpHandler := catalog.NewHTTPHandler(db, redisOdds, logger)
+	// Start HTTP server for /events and /ws endpoints.
+	httpHandler := catalog.NewHTTPHandler(db, redisOdds, broadcaster, logger)
 	httpAddr := envOr("HTTP_ADDR", ":8086")
 	httpServer := &http.Server{Addr: httpAddr, Handler: httpHandler.Mux()}
 	go func() {

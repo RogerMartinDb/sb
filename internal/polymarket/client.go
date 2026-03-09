@@ -59,6 +59,15 @@ func (m *Market) ParseOutcomes() ([]string, error) {
 	return out, nil
 }
 
+// ParseClobTokenIDs parses the JSON-encoded ClobTokenIDs string into a slice.
+func (m *Market) ParseClobTokenIDs() ([]string, error) {
+	var out []string
+	if err := json.Unmarshal([]byte(m.ClobTokenIDs), &out); err != nil {
+		return nil, fmt.Errorf("parse clobTokenIds %q: %w", m.ClobTokenIDs, err)
+	}
+	return out, nil
+}
+
 // ParseOutcomePrices parses the JSON-encoded OutcomePrices string into a slice.
 func (m *Market) ParseOutcomePrices() ([]string, error) {
 	var out []string
