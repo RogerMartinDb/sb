@@ -84,9 +84,12 @@ func (n *PolymarketNormaliser) Normalise(raw RawProviderEvent) ([]NormalisedMark
 			continue
 		}
 
-		targetValue := absLine(m.Line)
 		marketName := m.Name()
 		sels := buildSelections(ourType, outcomes, prices, m.Line)
+		targetValue := 0.0
+		if len(sels) > 0 {
+			targetValue = sels[0].targetValue
+		}
 
 		for i, sel := range sels {
 			selID := fmt.Sprintf("%s-%d", m.ConditionID, i)
@@ -149,16 +152,10 @@ func buildSelections(marketType string, outcomes, prices []string, line *float64
 			{name: outcomes[1], targetValue: 0, prob: p1},
 		}
 	case "SPREAD":
-		abs := absLine(line)
-		if derefLine(line) <= 0 {
-			return []selRow{
-				{name: outcomes[1], targetValue: abs, prob: p1},
-				{name: outcomes[0], targetValue: -abs, prob: p0},
-			}
-		}
+		l := derefLine(line)
 		return []selRow{
-			{name: outcomes[0], targetValue: abs, prob: p0},
-			{name: outcomes[1], targetValue: -abs, prob: p1},
+			{name: outcomes[0], targetValue: l, prob: p0},
+			{name: outcomes[1], targetValue: -l, prob: p1},
 		}
 	case "TOTAL":
 		l := absLine(line)
