@@ -51,9 +51,9 @@ make frontend-install && make frontend-dev   # React dev server on :3000
 |---|---|
 | **Bet Acceptance** | Synchronous HTTP bet placement; owns `outbox` table |
 | **Account & Wallet** | Double-entry ledger; gRPC server |
-| **Odds Management** | Consumes `market-data.normalised`; writes odds to DB + Redis + publishes `odds.updated` |
-| **Market Catalog** | gRPC server for market/selection metadata |
-| **Market Data Ingestion** | Normalises raw feed → `market-data.normalised` |
+| **Odds Management** | Consumes `price.update` from `market-data.normalised`; writes odds to DB + Redis + publishes `odds.updated` |
+| **Market Catalog** | Consumes `catalog.upsert` + `game.state` from `market-data.normalised`; upserts sports/events/markets/selections/live scores to DB; gRPC + HTTP server |
+| **Market Data Ingestion** | Polls external sources (Polymarket, NBA scores); normalises → `market-data.normalised`. Single gateway for all external data. |
 | **Bet History** | Consumes `bet.placed`, `bet.settled`; gRPC reads for UI |
 | **Settlement** | Consumes `bet.settled`; triggers `wallet.CreditBalance` |
 | **Identity/Auth** | JWT issuance; owns users/sessions tables |

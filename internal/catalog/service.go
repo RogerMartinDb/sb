@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/IBM/sarama"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
@@ -150,49 +149,6 @@ func (s *Service) setMarketStatus(ctx context.Context, marketID, newStatus strin
 	// Write through to Redis market-status cache.
 	key := fmt.Sprintf("market:status:%s", marketID)
 	return s.redisMarket.Set(ctx, key, newStatus, marketStatusTTL).Err()
-}
-
-// ConsumeNormalisedFeed consumes market-data.normalised to update catalog data.
-func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Pool, logger *slog.Logger) error {
-	cfg := sarama.NewConfig()
-	cfg.Version = sarama.V3_6_0_0
-	cfg.Consumer.Offsets.AutoCommit.Enable = true
-	cfg.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	cg, err := sarama.NewConsumerGroup(brokers, "market-catalog-cg", cfg)
-	if err != nil {
-		return fmt.Errorf("catalog: consumer group: %w", err)
-	}
-	defer cg.Close()
-
-	handler := &catalogFeedHandler{db: db, logger: logger}
-	for {
-		if err := cg.Consume(ctx, []string{"market-data.normalised"}, handler); err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			logger.Error("catalog: consume error", "err", err)
-		}
-		if ctx.Err() != nil {
-			return nil
-		}
-	}
-}
-
-type catalogFeedHandler struct {
-	db     *pgxpool.Pool
-	logger *slog.Logger
-}
-
-func (h *catalogFeedHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
-func (h *catalogFeedHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
-func (h *catalogFeedHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for msg := range claim.Messages() {
-		h.logger.Debug("catalog: received normalised feed", "partition", msg.Partition, "offset", msg.Offset)
-		// TODO: parse normalised event and upsert sports/events/markets/selections
-		session.MarkMessage(msg, "")
-	}
-	return nil
 }
 
 func marketStatusFromString(s string) sbv1.MarketStatus {

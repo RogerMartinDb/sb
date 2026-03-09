@@ -12,7 +12,11 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logLevel := slog.LevelInfo
+	if envOr("LOG_LEVEL", "") == "debug" {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -28,10 +32,20 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	sportradarURL := envOr("SPORTRADAR_API_URL", "https://api.sportradar.com")
 	sportradarKey := envOr("SPORTRADAR_API_KEY", "")
 
+	// Shared event matcher: populated by Polymarket feed, consumed by NBA score feed.
+	eventMatcher := marketdata.NewEventMatcher()
+
 	feeds := []marketdata.ProviderFeed{
 		marketdata.NewSportradarFeed(sportradarURL, sportradarKey, logger),
+		marketdata.NewPolymarketFeed(eventMatcher, logger),
+		marketdata.NewNBAScoreFeed(eventMatcher, logger),
 	}
-	normaliser := &marketdata.SportradarNormaliser{}
+
+	normaliser := marketdata.NewCompositeNormaliser(map[string]marketdata.Normaliser{
+		"sportradar": &marketdata.SportradarNormaliser{},
+		"polymarket": &marketdata.PolymarketNormaliser{},
+		"nba-scores": &marketdata.NBAScoreNormaliser{},
+	})
 
 	svc, err := marketdata.NewIngestionService(feeds, normaliser, kafkaBrokers, logger)
 	if err != nil {

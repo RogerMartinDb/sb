@@ -10,14 +10,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/IBM/sarama"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 
 	sbv1 "github.com/sportsbook/sb/gen/sportsbook/v1"
 	"github.com/sportsbook/sb/internal/catalog"
-	"github.com/sportsbook/sb/internal/polymarket"
 )
 
 func main() {
@@ -53,30 +51,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	grpcServer := grpc.NewServer()
 	sbv1.RegisterCatalogServiceServer(grpcServer, svc)
 
-	// Create Kafka producer for Polymarket syncer to publish price.update events.
-	kafkaCfg := sarama.NewConfig()
-	kafkaCfg.Version = sarama.V3_6_0_0
-	kafkaCfg.Producer.RequiredAcks = sarama.WaitForAll
-	kafkaCfg.Producer.Return.Successes = true
-	kafkaCfg.Producer.Return.Errors = true
-	producer, err := sarama.NewSyncProducer(kafkaBrokers, kafkaCfg)
-	if err != nil {
-		return fmt.Errorf("kafka producer: %w", err)
-	}
-	defer producer.Close()
-
-	// Run Kafka consumer in background.
+	// Run Kafka consumer in background — handles catalog.upsert, game.state
+	// events from market-data.normalised (published by the marketdata service).
 	go func() {
 		if err := catalog.ConsumeNormalisedFeed(ctx, kafkaBrokers, db, logger); err != nil {
 			logger.Error("catalog feed consumer error", "err", err)
 		}
 	}()
-
-	// Run Polymarket syncer in background (with Kafka producer).
-	go polymarket.NewSyncer(db, producer, logger).Run(ctx)
-
-	// Run NBA live score updater in background.
-	go polymarket.NewScoreUpdater(db, logger).Run(ctx)
 
 	// Run status cache warmer in background.
 	go catalog.NewStatusCacheWarmer(db, redisMarket, logger).Run(ctx)
