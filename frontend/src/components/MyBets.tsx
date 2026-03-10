@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getMyBets, type Bet } from '../api'
+import type { OddsFormat } from '../App'
 
 const STATUS_COLOURS: Record<string, string> = {
   PLACED:       '#1976d2',
@@ -8,12 +9,19 @@ const STATUS_COLOURS: Record<string, string> = {
   VOID:         '#9e9e9e',
 }
 
-function formatOdds(decimal: number, american: number) {
-  const americanStr = american >= 0 ? `+${american}` : `${american}`
-  return `${decimal.toFixed(2)} (${americanStr})`
+function formatOdds(decimal: number, american: number, format: OddsFormat = 'american'): string {
+  switch (format) {
+    case 'decimal': return decimal.toFixed(2)
+    case 'cent':    return (100 / decimal).toFixed(1)
+    default:        return american >= 0 ? `+${american}` : `${american}`
+  }
 }
 
-export default function MyBets() {
+interface Props {
+  oddsFormat?: OddsFormat
+}
+
+export default function MyBets({ oddsFormat = 'american' }: Props) {
   const [bets, setBets] = useState<Bet[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +78,7 @@ export default function MyBets() {
             </div>
 
             <div style={{ fontSize: 13, marginBottom: 4 }}>
-              Odds: <strong>{formatOdds(bet.odds_decimal, bet.odds_american)}</strong>
+              Odds: <strong>{formatOdds(bet.odds_decimal, bet.odds_american, oddsFormat)}</strong>
               {' · '}
               Stake: <strong>£{(bet.stake_minor / 100).toFixed(2)}</strong>
               {bet.payout_minor != null && (

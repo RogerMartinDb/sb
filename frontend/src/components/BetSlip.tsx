@@ -1,18 +1,23 @@
 import { useState } from 'react'
 import { placeBet, ApiError, type PlaceBetResponse } from '../api'
 import type { SelectedBet } from './EventList'
+import type { OddsFormat } from '../App'
 
 interface Props {
   selectedBet: SelectedBet
   onClear: () => void
+  oddsFormat?: OddsFormat
 }
 
-function formatOdds(decimal: number, american: number) {
-  const americanStr = american >= 0 ? `+${american}` : `${american}`
-  return `${decimal.toFixed(2)} (${americanStr})`
+function formatOdds(decimal: number, american: number, format: OddsFormat = 'american'): string {
+  switch (format) {
+    case 'decimal': return decimal.toFixed(2)
+    case 'cent':    return (100 / decimal).toFixed(1)
+    default:        return american >= 0 ? `+${american}` : `${american}`
+  }
 }
 
-export default function BetSlip({ selectedBet, onClear }: Props) {
+export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' }: Props) {
   const [stake, setStake] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PlaceBetResponse | null>(null)
@@ -55,7 +60,7 @@ export default function BetSlip({ selectedBet, onClear }: Props) {
       <div style={{ border: '1px solid #4caf50', borderRadius: 8, padding: 16 }}>
         <h3 style={{ color: '#4caf50' }}>Bet Accepted</h3>
         <p>Bet ID: <code>{result.bet_id}</code></p>
-        <p>Odds: {formatOdds(result.odds_decimal, result.odds_american)}</p>
+        <p>Odds: {formatOdds(result.odds_decimal, result.odds_american, oddsFormat)}</p>
         <p>Stake: £{(result.stake / 100).toFixed(2)}</p>
         <button onClick={() => { setResult(null); setStake(''); onClear() }}>
           Place Another Bet
@@ -73,7 +78,7 @@ export default function BetSlip({ selectedBet, onClear }: Props) {
 
       <p style={{ fontSize: 14, marginBottom: 4 }}>{selectedBet.market_name}</p>
       <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-        {selectedBet.selection_name} @ {formatOdds(selectedBet.odds_decimal, selectedBet.odds_american)}
+        {selectedBet.selection_name} @ {formatOdds(selectedBet.odds_decimal, selectedBet.odds_american, oddsFormat)}
       </p>
 
       <div style={{ marginBottom: 12 }}>

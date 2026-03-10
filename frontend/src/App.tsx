@@ -9,6 +9,7 @@ import { useIsMobile } from './hooks/useIsMobile'
 
 type Tab = 'events' | 'mybets'
 type AuthModal = 'login' | 'register' | null
+export type OddsFormat = 'american' | 'decimal' | 'cent'
 
 const C = {
   bg:        '#07152b',
@@ -195,6 +196,7 @@ export default function App() {
   const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null)
   const [competitionFilter, setCompetitionFilter] = useState<string>('nba')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [oddsFormat, setOddsFormat] = useState<OddsFormat>('american')
   const isMobile = useIsMobile()
 
   function handleAuth(t: string, e: string) {
@@ -307,7 +309,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 0 }}>
+        <nav style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 0, alignItems: 'center' }}>
           {(['events', 'mybets'] as Tab[]).map(t => (
             <button
               key={t}
@@ -328,6 +330,27 @@ export default function App() {
               {t === 'events' ? 'EVENTS' : 'MY BETS'}
             </button>
           ))}
+          <div style={{ flex: 1 }} />
+          <select
+            value={oddsFormat}
+            onChange={e => setOddsFormat(e.target.value as OddsFormat)}
+            style={{
+              background: C.active,
+              color: C.muted,
+              border: `1px solid ${C.border}`,
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '3px 6px',
+              cursor: 'pointer',
+              outline: 'none',
+              marginBottom: 4,
+            }}
+          >
+            <option value="american">American</option>
+            <option value="decimal">Decimal</option>
+            <option value="cent">Cent</option>
+          </select>
         </nav>
 
         {tab === 'events' ? (
@@ -387,16 +410,17 @@ export default function App() {
                 onSelectBet={setSelectedBet}
                 competitionId={competitionFilter}
                 groupByDate={competitionFilter !== '__live__' && !SPORTS.find(s => s.id === 'politics')?.competitions.some(c => c.id === competitionFilter)}
+                oddsFormat={oddsFormat}
               />
               {selectedBet && (
                 <div style={{ marginTop: 16 }}>
-                  <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} />
+                  <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <MyBets />
+          <MyBets oddsFormat={oddsFormat} />
         )}
       </div>
     </div>

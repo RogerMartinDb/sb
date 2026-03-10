@@ -3,6 +3,7 @@ import { type Event, type Market, type Selection } from '../api'
 import { useEventsWS, type ScoreFlashSide } from '../hooks/useEventsWS'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { getTeamMeta, formatTeamName, formatTeamNameShort } from '../teamMeta'
+import type { OddsFormat } from '../App'
 
 export interface SelectedBet {
   market_id: string
@@ -17,6 +18,7 @@ interface Props {
   onSelectBet: (bet: SelectedBet) => void
   competitionId?: string | null
   groupByDate?: boolean
+  oddsFormat?: OddsFormat
 }
 
 function shouldFlashScore(side: ScoreFlashSide | undefined, team: 'home' | 'away'): boolean {
@@ -24,8 +26,12 @@ function shouldFlashScore(side: ScoreFlashSide | undefined, team: 'home' | 'away
   return side === 'both' || side === team
 }
 
-function formatAmerican(n: number): string {
-  return n >= 0 ? `+${n}` : `${n}`
+function formatOdds(decimal: number, american: number, format: OddsFormat): string {
+  switch (format) {
+    case 'decimal': return decimal.toFixed(2)
+    case 'cent':    return (100 / decimal).toFixed(1)
+    default:        return american >= 0 ? `+${american}` : `${american}`
+  }
 }
 
 function formatLine(sel: Selection, market: Market): string {
@@ -89,7 +95,7 @@ function dateLabel(key: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
 }
 
-export default function EventList({ onSelectBet, competitionId, groupByDate = true }: Props) {
+export default function EventList({ onSelectBet, competitionId, groupByDate = true, oddsFormat = 'american' }: Props) {
   const { events, loading, oddsFlash, scoreFlash } = useEventsWS()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -274,7 +280,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                   <>
                     <div style={{ fontSize: 9, color: yesActive ? C.selText : '#27ae60', fontWeight: 700, marginBottom: 1 }}>YES</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: yesActive ? C.selText : C.btnOdds }}>
-                      {formatAmerican(yesSel.odds_american)}
+                      {formatOdds(yesSel.odds_decimal, yesSel.odds_american, oddsFormat)}
                     </div>
                   </>
                 ) : (
@@ -313,7 +319,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                   <>
                     <div style={{ fontSize: 9, color: noActive ? C.selText : C.live, fontWeight: 700, marginBottom: 1 }}>NO</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: noActive ? C.selText : C.btnOdds }}>
-                      {formatAmerican(noSel.odds_american)}
+                      {formatOdds(noSel.odds_decimal, noSel.odds_american, oddsFormat)}
                     </div>
                   </>
                 ) : (
@@ -608,7 +614,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                               fontWeight: 700,
                               color: active ? C.selText : C.btnOdds,
                             }}>
-                              {formatAmerican(sel.odds_american)}
+                              {formatOdds(sel.odds_decimal, sel.odds_american, oddsFormat)}
                             </div>
                           </>
                         ) : (
@@ -701,7 +707,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                                       {formatLine(sel, altMarket)}
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: active ? C.selText : C.btnOdds }}>
-                                      {formatAmerican(sel.odds_american)}
+                                      {formatOdds(sel.odds_decimal, sel.odds_american, oddsFormat)}
                                     </div>
                                   </>
                                 ) : (
