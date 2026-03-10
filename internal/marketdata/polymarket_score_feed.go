@@ -19,7 +19,8 @@ const (
 // Polymarket sports WS. Keys must match the leagueAbbreviation field exactly.
 var supportedLeagues = map[string]bool{
 	"nba": true,
-	"cbb": true,
+	"cbb": true, // NCAAB
+	"nhl": true,
 }
 
 // SportResult is the JSON payload received from the Polymarket sports WS.

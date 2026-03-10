@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -72,10 +73,11 @@ func (f *NHLScoreFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 
 		var homeTeam, awayTeam string
 		for _, c := range game.Competitions[0].Competitors {
+			name := nhlTeamName(c.Team.Location, c.Team.DisplayName)
 			if c.HomeAway == "home" {
-				homeTeam = c.Team.DisplayName
+				homeTeam = name
 			} else {
-				awayTeam = c.Team.DisplayName
+				awayTeam = name
 			}
 		}
 
@@ -130,4 +132,18 @@ func (f *NHLScoreFeed) fetchScoreboard(ctx context.Context) ([]ESPNGame, error) 
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return sb.Events, nil
+}
+
+// nhlTeamName returns the team nickname for EventMatcher lookups.
+// Polymarket NHL event titles use nicknames only (e.g. "Bruins", "Golden Knights"),
+// so we strip the city prefix from ESPN's DisplayName:
+//
+//	Location="Boston"   + DisplayName="Boston Bruins"        → "Bruins"
+//	Location="Tampa Bay"+ DisplayName="Tampa Bay Lightning"  → "Lightning"
+//	Location="Vegas"    + DisplayName="Vegas Golden Knights" → "Golden Knights"
+func nhlTeamName(location, displayName string) string {
+	if location != "" && strings.HasPrefix(displayName, location+" ") {
+		return displayName[len(location)+1:]
+	}
+	return displayName
 }
