@@ -24,8 +24,12 @@ interface SnapshotMsg {
 
 type WSMessage = SnapshotMsg | OddsUpdateMsg | ScoreUpdateMsg
 
-function applyOddsUpdate(events: Event[], msg: OddsUpdateMsg): Event[] {
-  let changed = false
+function applyOddsUpdate(
+  events: Event[],
+  msg: OddsUpdateMsg,
+): { next: Event[]; changed: { id: string; dir: 'up' | 'down' }[] } {
+  let anyChanged = false
+  const changed: { id: string; dir: 'up' | 'down' }[] = []
   const next = events.map(ev => {
     let evChanged = false
     const markets = ev.markets.map(m => {
@@ -35,6 +39,7 @@ function applyOddsUpdate(events: Event[], msg: OddsUpdateMsg): Event[] {
         const update = msg.selections.find(u => u.selection_id === s.selection_id)
         if (!update) return s
         if (s.odds_decimal === update.odds_decimal && s.odds_american === update.odds_american) return s
+        changed.push({ id: s.selection_id, dir: update.odds_decimal > s.odds_decimal ? 'up' : 'down' })
         mChanged = true
         return { ...s, odds_decimal: update.odds_decimal, odds_american: update.odds_american }
       })
@@ -43,14 +48,18 @@ function applyOddsUpdate(events: Event[], msg: OddsUpdateMsg): Event[] {
       return { ...m, selections }
     })
     if (!evChanged) return ev
-    changed = true
+    anyChanged = true
     return { ...ev, markets }
   })
-  return changed ? next : events
+  return { next: anyChanged ? next : events, changed }
 }
 
-function applyScoreUpdate(events: Event[], msg: ScoreUpdateMsg): Event[] {
-  let changed = false
+function applyScoreUpdate(
+  events: Event[],
+  msg: ScoreUpdateMsg,
+): { next: Event[]; changedId: string | null; scoreChanged: boolean } {
+  let changedId: string | null = null
+  let scoreChanged = false
   const next = events.map(ev => {
     if (ev.event_id !== msg.event_id) return ev
     if (
@@ -60,7 +69,10 @@ function applyScoreUpdate(events: Event[], msg: ScoreUpdateMsg): Event[] {
       ev.game_clock === msg.game_clock &&
       ev.status === msg.status
     ) return ev
-    changed = true
+    if (ev.home_score !== msg.home_score || ev.away_score !== msg.away_score) {
+      scoreChanged = true
+    }
+    changedId = ev.event_id
     return {
       ...ev,
       home_score: msg.home_score,
@@ -70,21 +82,35 @@ function applyScoreUpdate(events: Event[], msg: ScoreUpdateMsg): Event[] {
       status: msg.status,
     }
   })
-  return changed ? next : events
+  return { next: changedId ? next : events, changedId, scoreChanged }
 }
 
-export function useEventsWS(): { events: Event[]; loading: boolean } {
+const FLASH_DURATION = 1500
+
+export type ScoreFlashSide = 'home' | 'away' | 'both'
+
+export function useEventsWS(): {
+  events: Event[]
+  loading: boolean
+  oddsFlash: Map<string, 'up' | 'down'>
+  scoreFlash: Map<string, ScoreFlashSide>
+} {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [oddsFlash, setOddsFlash] = useState<Map<string, 'up' | 'down'>>(new Map())
+  const [scoreFlash, setScoreFlash] = useState<Map<string, ScoreFlashSide>>(new Map())
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout>>()
   const backoffRef = useRef(1000)
+  const eventsRef = useRef<Event[]>([])
 
   // Fallback: fetch via HTTP if WS is not available.
   const fetchFallback = useCallback(() => {
     getEvents()
       .then(data => {
-        setEvents(data ?? [])
+        const d = data ?? []
+        eventsRef.current = d
+        setEvents(d)
         setLoading(false)
       })
       .catch(() => {})
@@ -114,16 +140,67 @@ export function useEventsWS(): { events: Event[]; loading: boolean } {
         }
 
         switch (msg.type) {
-          case 'snapshot':
-            setEvents(msg.events ?? [])
+          case 'snapshot': {
+            const d = msg.events ?? []
+            eventsRef.current = d
+            setEvents(d)
             setLoading(false)
             break
-          case 'odds_update':
-            setEvents(prev => applyOddsUpdate(prev, msg))
+          }
+          case 'odds_update': {
+            const { next, changed } = applyOddsUpdate(eventsRef.current, msg)
+            eventsRef.current = next
+            setEvents(next)
+            if (changed.length) {
+              setOddsFlash(f => {
+                const m = new Map(f)
+                changed.forEach(c => m.set(c.id, c.dir))
+                return m
+              })
+              setTimeout(() => {
+                if (unmounted) return
+                setOddsFlash(f => {
+                  const m = new Map(f)
+                  changed.forEach(c => m.delete(c.id))
+                  return m
+                })
+              }, FLASH_DURATION)
+            }
             break
-          case 'score_update':
-            setEvents(prev => applyScoreUpdate(prev, msg))
+          }
+          case 'score_update': {
+            // Determine which score(s) changed from current eventsRef.
+            const cur = eventsRef.current.find(e => e.event_id === msg.event_id)
+            const homeChanged = cur != null && cur.home_score !== msg.home_score
+            const awayChanged = cur != null && cur.away_score !== msg.away_score
+            const flashSide: ScoreFlashSide | null =
+              homeChanged && awayChanged ? 'both'
+              : homeChanged ? 'home'
+              : awayChanged ? 'away'
+              : null
+
+            // Use functional updater so React always has the authoritative prev.
+            setEvents(prev => {
+              const { next } = applyScoreUpdate(prev, msg)
+              eventsRef.current = next
+              return next
+            })
+
+            if (flashSide) {
+              const id = msg.event_id
+              const side = flashSide
+              setScoreFlash(f => new Map([...f, [id, side]]))
+              setTimeout(() => {
+                if (unmounted) return
+                setScoreFlash(f => {
+                  const m = new Map(f)
+                  m.delete(id)
+                  return m
+                })
+              }, FLASH_DURATION)
+            }
             break
+          }
         }
       }
 
@@ -164,5 +241,6 @@ export function useEventsWS(): { events: Event[]; loading: boolean } {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { events, loading }
+  return { events, loading, oddsFlash, scoreFlash }
 }
+

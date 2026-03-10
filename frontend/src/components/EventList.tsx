@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { type Event, type Market, type Selection } from '../api'
-import { useEventsWS } from '../hooks/useEventsWS'
+import { useEventsWS, type ScoreFlashSide } from '../hooks/useEventsWS'
 
 export interface SelectedBet {
   market_id: string
@@ -15,6 +15,11 @@ interface Props {
   onSelectBet: (bet: SelectedBet) => void
   competitionId?: string | null
   groupByDate?: boolean
+}
+
+function shouldFlashScore(side: ScoreFlashSide | undefined, team: 'home' | 'away'): boolean {
+  if (!side) return false
+  return side === 'both' || side === team
 }
 
 function formatAmerican(n: number): string {
@@ -68,18 +73,23 @@ function dateLabel(key: string): string {
 }
 
 export default function EventList({ onSelectBet, competitionId, groupByDate = true }: Props) {
-  const { events, loading } = useEventsWS()
+  const { events, loading, oddsFlash, scoreFlash } = useEventsWS()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [altOpen, setAltOpen] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     // Inject pulse animation for live indicator.
-    const id = 'live-pulse-keyframes'
+    const id = 'sb-keyframes'
     if (!document.getElementById(id)) {
       const style = document.createElement('style')
       style.id = id
-      style.textContent = `@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`
+      style.textContent = [
+        `@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`,
+        `@keyframes flashOddsUp { 0% { background: #1b5e32; box-shadow: inset 0 0 0 1px #27ae60; } 100% { background: #142a4a; box-shadow: none; } }`,
+        `@keyframes flashOddsDown { 0% { background: #5e1b1b; box-shadow: inset 0 0 0 1px #e74c3c; } 100% { background: #142a4a; box-shadow: none; } }`,
+        `@keyframes flashScore { 0% { color: #f5c518; transform: scale(1.25); } 60% { color: #f5c518; transform: scale(1.1); } 100% { color: #e2e8f0; transform: scale(1); } }`,
+      ].join(' ')
       document.head.appendChild(style)
     }
   }, [])
@@ -212,6 +222,9 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                   background: yesActive ? C.selBg : (yesDisabled ? 'transparent' : C.btnBg),
                   cursor: yesDisabled ? 'default' : 'pointer',
                   textAlign: 'center',
+                  animation: (!yesActive && !yesDisabled && oddsFlash.has(yesSel.selection_id))
+                    ? `flashOdds${oddsFlash.get(yesSel.selection_id) === 'up' ? 'Up' : 'Down'} 1.5s ease-out forwards`
+                    : undefined,
                 }}
               >
                 {!yesDisabled ? (
@@ -248,6 +261,9 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                   background: noActive ? C.selBg : (noDisabled ? 'transparent' : C.btnBg),
                   cursor: noDisabled ? 'default' : 'pointer',
                   textAlign: 'center',
+                  animation: (!noActive && !noDisabled && oddsFlash.has(noSel.selection_id))
+                    ? `flashOdds${oddsFlash.get(noSel.selection_id) === 'up' ? 'Up' : 'Down'} 1.5s ease-out forwards`
+                    : undefined,
                 }}
               >
                 {!noDisabled ? (
@@ -464,13 +480,20 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                     {teamSel.name}
                   </span>
                   {ev.status === 'LIVE' && (
-                    <span style={{
-                      fontSize: 15,
-                      fontWeight: 800,
-                      color: C.text,
-                      fontVariantNumeric: 'tabular-nums',
-                      flexShrink: 0,
-                    }}>
+                    <span
+                      key={i === 0 ? `away-${ev.away_score}` : `home-${ev.home_score}`}
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 800,
+                        color: C.text,
+                        fontVariantNumeric: 'tabular-nums',
+                        flexShrink: 0,
+                        display: 'inline-block',
+                        animation: shouldFlashScore(scoreFlash.get(ev.event_id), i === 0 ? 'away' : 'home')
+                          ? 'flashScore 1.5s ease-out forwards'
+                          : undefined,
+                      }}
+                    >
                       {i === 0 ? ev.away_score : ev.home_score}
                     </span>
                   )}
@@ -512,7 +535,10 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                           background: active ? C.selBg : (disabled ? 'transparent' : C.btnBg),
                           cursor: disabled ? 'default' : 'pointer',
                           textAlign: 'center',
-                          transition: 'background 0.15s',
+                          transition: active || disabled ? 'background 0.15s' : undefined,
+                          animation: (!active && !disabled && sel && oddsFlash.has(sel.selection_id))
+                            ? `flashOdds${oddsFlash.get(sel.selection_id) === 'up' ? 'Up' : 'Down'} 1.5s ease-out forwards`
+                            : undefined,
                         }}
                       >
                         {!disabled ? (
