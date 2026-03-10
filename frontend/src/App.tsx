@@ -274,7 +274,7 @@ export default function App() {
               </button>
             )}
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.gold, margin: 0, letterSpacing: '0.05em' }}>
-              SPORTSBOOK
+              Sports++
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
