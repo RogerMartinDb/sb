@@ -95,10 +95,14 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
   }, [])
 
   const BASKETBALL_IDS = new Set(['nba', 'ncaab'])
+  const LIVE_ALL = competitionId === '__live__'
 
-  const visibleEvents = (competitionId
-    ? events.filter(ev => ev.competition_id === competitionId)
-    : events
+  const visibleEvents = (
+    LIVE_ALL
+      ? events.filter(ev => ev.status === 'LIVE')
+      : competitionId
+        ? events.filter(ev => ev.competition_id === competitionId)
+        : events
   ).filter(ev => {
     if (!BASKETBALL_IDS.has(ev.competition_id)) return true
     const mainMarkets = ev.markets.filter(m => m.is_main)
@@ -106,7 +110,11 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
   })
 
   if (loading) return <p style={{ color: C.muted, padding: 12 }}>Loading events…</p>
-  if (visibleEvents.length === 0) return <p style={{ color: C.muted, padding: 12 }}>No upcoming events.</p>
+  if (visibleEvents.length === 0) return (
+    <p style={{ color: C.muted, padding: 12 }}>
+      {LIVE_ALL ? 'No live events right now.' : 'No upcoming events.'}
+    </p>
+  )
 
   const COLS: { label: string; type: string }[] = [
     { label: 'Spread', type: 'SPREAD' },
@@ -114,27 +122,44 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
     { label: 'Total',  type: 'TOTAL' },
   ]
 
-  // Separate live games from scheduled, then group scheduled by date (unless groupByDate is false).
-  const liveEvents = visibleEvents.filter(ev => ev.status === 'LIVE')
-  const scheduledEvents = visibleEvents.filter(ev => ev.status !== 'LIVE')
-
   const groups: { key: string; label: string; evs: Event[] }[] = []
-  if (liveEvents.length > 0) {
-    groups.push({ key: '_live', label: 'LIVE', evs: liveEvents })
-  }
-  if (groupByDate) {
-    for (const ev of scheduledEvents) {
-      const k = dateKey(ev.starts_at)
-      const last = groups[groups.length - 1]
-      if (last && last.key === k) {
-        last.evs.push(ev)
+
+  if (LIVE_ALL) {
+    // Group all live events by competition, preserving insertion order.
+    const byComp = new Map<string, Event[]>()
+    for (const ev of visibleEvents) {
+      const arr = byComp.get(ev.competition_id)
+      if (arr) {
+        arr.push(ev)
       } else {
-        groups.push({ key: k, label: dateLabel(k), evs: [ev] })
+        byComp.set(ev.competition_id, [ev])
       }
     }
+    for (const [compId, evs] of byComp) {
+      groups.push({ key: compId, label: compId.toUpperCase(), evs })
+    }
   } else {
-    if (scheduledEvents.length > 0) {
-      groups.push({ key: '_all', label: '', evs: scheduledEvents })
+    // Separate live games from scheduled, then group scheduled by date (unless groupByDate is false).
+    const liveEvents = visibleEvents.filter(ev => ev.status === 'LIVE')
+    const scheduledEvents = visibleEvents.filter(ev => ev.status !== 'LIVE')
+
+    if (liveEvents.length > 0) {
+      groups.push({ key: '_live', label: 'LIVE', evs: liveEvents })
+    }
+    if (groupByDate) {
+      for (const ev of scheduledEvents) {
+        const k = dateKey(ev.starts_at)
+        const last = groups[groups.length - 1]
+        if (last && last.key === k) {
+          last.evs.push(ev)
+        } else {
+          groups.push({ key: k, label: dateLabel(k), evs: [ev] })
+        }
+      }
+    } else {
+      if (scheduledEvents.length > 0) {
+        groups.push({ key: '_all', label: '', evs: scheduledEvents })
+      }
     }
   }
 

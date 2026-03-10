@@ -17,6 +17,7 @@ const C = {
   text:      '#e2e8f0',
   muted:     '#6b849e',
   active:    '#142a4a',
+  live:      '#e74c3c',
 }
 
 interface Competition {
@@ -67,6 +68,40 @@ function LeftMenu({ selected, onSelect }: LeftMenuProps) {
       alignSelf: 'flex-start',
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
     }}>
+      {/* Live — top-level selectable */}
+      <button
+        onClick={() => onSelect('__live__')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          background: selected === '__live__' ? '#1a0a0a' : 'none',
+          border: 'none',
+          borderBottom: `1px solid ${C.border}`,
+          borderLeft: selected === '__live__' ? `3px solid ${C.live}` : '3px solid transparent',
+          color: C.live,
+          fontSize: 12,
+          fontWeight: 800,
+          letterSpacing: '0.08em',
+          padding: '10px 14px',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: C.live,
+          boxShadow: `0 0 5px ${C.live}`,
+          flexShrink: 0,
+          display: 'inline-block',
+          animation: 'pulse 2s ease-in-out infinite',
+        }} />
+        LIVE
+      </button>
+
       {SPORTS.map(sport => {
         const isOpen = expanded[sport.id] ?? false
         return (
@@ -262,7 +297,7 @@ export default function App() {
               <EventList
                 onSelectBet={setSelectedBet}
                 competitionId={competitionFilter}
-                groupByDate={!SPORTS.find(s => s.id === 'politics')?.competitions.some(c => c.id === competitionFilter)}
+                groupByDate={competitionFilter !== '__live__' && !SPORTS.find(s => s.id === 'politics')?.competitions.some(c => c.id === competitionFilter)}
               />
               {selectedBet && (
                 <div style={{ marginTop: 16 }}>
