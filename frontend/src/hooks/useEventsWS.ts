@@ -136,6 +136,7 @@ export function useEventsWS(): { events: Event[]; loading: boolean } {
       }
 
       ws.onerror = () => {
+        if (unmounted) return
         // If we never got a snapshot (still loading), fall back to HTTP.
         if (loading) {
           fetchFallback()
@@ -149,9 +150,16 @@ export function useEventsWS(): { events: Event[]; loading: boolean } {
     return () => {
       unmounted = true
       if (reconnectRef.current) clearTimeout(reconnectRef.current)
-      if (wsRef.current) {
-        wsRef.current.onclose = null // prevent reconnect on intentional close
-        wsRef.current.close()
+      const ws = wsRef.current
+      if (ws) {
+        ws.onclose = null
+        ws.onerror = null
+        if (ws.readyState === WebSocket.CONNECTING) {
+          // Close after the handshake completes to avoid "closed before established" error
+          ws.onopen = () => ws.close()
+        } else {
+          ws.close()
+        }
       }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
