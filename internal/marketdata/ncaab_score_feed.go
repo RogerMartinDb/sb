@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -94,10 +95,7 @@ func (f *NCAABScoreFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 
 		var homeTeam, awayTeam string
 		for _, c := range game.Competitions[0].Competitors {
-			name := c.Team.Location
-			if name == "" {
-				name = c.Team.DisplayName
-			}
+			name := ncaabTeamName(c.Team.Location, c.Team.DisplayName)
 			if c.HomeAway == "home" {
 				homeTeam = name
 			} else {
@@ -156,4 +154,20 @@ func (f *NCAABScoreFeed) fetchScoreboard(ctx context.Context) ([]ESPNGame, error
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return sb.Events, nil
+}
+
+// ncaabTeamName returns the best team name for EventMatcher lookups.
+// ESPN's Location field (e.g. "Duke", "North Carolina") is preferred because
+// it matches what Polymarket puts in event titles. If Location is empty we
+// fall back to DisplayName but strip the mascot (last space-delimited word),
+// e.g. "Duke Blue Devils" → "Duke", "Connecticut Huskies" → "Connecticut".
+func ncaabTeamName(location, displayName string) string {
+	if location != "" {
+		return location
+	}
+	// Strip mascot word from DisplayName.
+	if idx := strings.LastIndex(displayName, " "); idx > 0 {
+		return displayName[:idx]
+	}
+	return displayName
 }

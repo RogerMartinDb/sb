@@ -30,7 +30,9 @@ func (m *EventMatcher) Register(eventID, name string) {
 }
 
 // FindByTeams returns the event ID for a game matching both team names.
-// Team names are matched case-insensitively as substrings of the event name.
+// Team names are matched case-insensitively as whole words so that "Kansas"
+// does not false-match "Kansas State", "Michigan" does not match
+// "Michigan State", etc.
 func (m *EventMatcher) FindByTeams(homeTeam, awayTeam string) (string, bool) {
 	home := strings.ToLower(homeTeam)
 	away := strings.ToLower(awayTeam)
@@ -40,9 +42,34 @@ func (m *EventMatcher) FindByTeams(homeTeam, awayTeam string) (string, bool) {
 
 	for _, entry := range m.events {
 		name := strings.ToLower(entry.name)
-		if strings.Contains(name, home) && strings.Contains(name, away) {
+		if containsWholeWord(name, home) && containsWholeWord(name, away) {
 			return entry.eventID, true
 		}
 	}
 	return "", false
+}
+
+// containsWholeWord reports whether s contains word as a whole-word match,
+// i.e. not immediately surrounded by ASCII letters on either side.
+// This prevents "kansas" from matching "kansas state" and vice versa.
+func containsWholeWord(s, word string) bool {
+	for i := 0; i <= len(s)-len(word); {
+		idx := strings.Index(s[i:], word)
+		if idx < 0 {
+			return false
+		}
+		idx += i
+		end := idx + len(word)
+		leftOK := idx == 0 || !isASCIILetter(s[idx-1])
+		rightOK := end == len(s) || !isASCIILetter(s[end])
+		if leftOK && rightOK {
+			return true
+		}
+		i = idx + 1
+	}
+	return false
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
