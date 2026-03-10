@@ -13,11 +13,12 @@ import (
 
 const gammaBaseURL = "https://gamma-api.polymarket.com"
 
-// Polymarket tag IDs for basketball competitions.
+// Polymarket tag IDs for sport competitions.
 const (
-	NBATagID   = 745    // NBA
-	NCAABTagID = 28 // Basketball (includes CBB games with "cbb-" slug prefix)
-	IranTagID  = 78 // Iran
+	NBATagID   = 745 // NBA
+	NCAABTagID = 28  // Basketball (includes CBB games with "cbb-" slug prefix)
+	NHLTagID   = 899 // Hockey / NHL
+	IranTagID  = 78  // Iran
 )
 
 // Event is a Polymarket game event (e.g., "Nets vs. Pistons") from the /events endpoint.
@@ -108,6 +109,11 @@ func (c *Client) FetchNBAEvents(ctx context.Context) ([]Event, error) {
 // FetchNCAABEvents returns active, non-closed NCAAB game events from Polymarket.
 func (c *Client) FetchNCAABEvents(ctx context.Context) ([]Event, error) {
 	return c.FetchEvents(ctx, NCAABTagID)
+}
+
+// FetchNHLEvents returns active, non-closed NHL game events from Polymarket.
+func (c *Client) FetchNHLEvents(ctx context.Context) ([]Event, error) {
+	return c.FetchEvents(ctx, NHLTagID)
 }
 
 // FetchEvents returns active, non-closed events for the given Polymarket tag ID.

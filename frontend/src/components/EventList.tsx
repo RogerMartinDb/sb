@@ -112,7 +112,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
     }
   }, [])
 
-  const BASKETBALL_IDS = new Set(['nba', 'ncaab'])
+  const SPORTS_IDS = new Set(['nba', 'ncaab', 'nhl'])
   const LIVE_ALL = competitionId === '__live__'
 
   const visibleEvents = (
@@ -122,7 +122,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
         ? events.filter(ev => ev.competition_id === competitionId)
         : events
   ).filter(ev => {
-    if (!BASKETBALL_IDS.has(ev.competition_id)) return true
+    if (!SPORTS_IDS.has(ev.competition_id)) return true
     const mainMarkets = ev.markets.filter(m => m.is_main)
     return mainMarkets.some(m => m.selections.some(s => s.odds_decimal > 0))
   })

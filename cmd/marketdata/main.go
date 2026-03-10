@@ -42,10 +42,12 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		marketdata.NewSportradarFeed(sportradarURL, sportradarKey, logger),
 		marketdata.NewPolymarketFeed(eventMatcher, tokenRegistry, logger),
 		marketdata.NewNCAABFeed(eventMatcher, tokenRegistry, logger),
+		marketdata.NewNHLFeed(eventMatcher, tokenRegistry, logger),
 		marketdata.NewIranFeed(logger),
 		// REST polling score feeds (fallback).
 		marketdata.NewNBAScoreFeed(eventMatcher, logger),
 		marketdata.NewNCAABScoreFeed(eventMatcher, logger),
+		marketdata.NewNHLScoreFeed(eventMatcher, logger),
 		// WebSocket streaming feeds.
 		marketdata.NewPolymarketPriceFeed(tokenRegistry, logger),
 		marketdata.NewPolymarketScoreFeed(eventMatcher, logger),
@@ -53,11 +55,13 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 	normaliser := marketdata.NewCompositeNormaliser(map[string]marketdata.Normaliser{
 		"sportradar":          &marketdata.SportradarNormaliser{},
-		"polymarket-nba":      marketdata.NewPolymarketNormaliser("nba", "NBA"),
-		"polymarket-ncaab":    marketdata.NewPolymarketNormaliser("ncaab", "NCAAB"),
+		"polymarket-nba":      marketdata.NewPolymarketNormaliser("basketball", "Basketball", "nba", "NBA"),
+		"polymarket-ncaab":    marketdata.NewPolymarketNormaliser("basketball", "Basketball", "ncaab", "NCAAB"),
+		"polymarket-nhl":      marketdata.NewPolymarketNormaliser("hockey", "Hockey", "nhl", "NHL"),
 		"polymarket-iran":     marketdata.NewPoliticsNormaliser("politics", "Politics", "iran", "Iran", "IR"),
 		"nba-scores":          &marketdata.NBAScoreNormaliser{},
 		"ncaab-scores":        &marketdata.NCAABScoreNormaliser{},
+		"nhl-scores":          &marketdata.NHLScoreNormaliser{},
 		"polymarket-ws-price": &marketdata.PolymarketWSPriceNormaliser{},
 		"polymarket-scores":   &marketdata.PolymarketScoreNormaliser{},
 	})

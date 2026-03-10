@@ -11,11 +11,7 @@ import (
 	"github.com/sportsbook/sb/internal/polymarket"
 )
 
-const (
-	sportID       = "basketball"
-	sportName     = "Basketball"
-	lookAheadDays = 14
-)
+const lookAheadDays = 14
 
 // allowedTypes maps Polymarket sportsMarketType → our market_type enum.
 var allowedTypes = map[string]string{
@@ -27,12 +23,21 @@ var allowedTypes = map[string]string{
 // PolymarketNormaliser converts a Polymarket game event into catalog.upsert
 // and price.update events for a specific competition.
 type PolymarketNormaliser struct {
+	sportID         string
+	sportName       string
 	competitionID   string
 	competitionName string
 }
 
-func NewPolymarketNormaliser(competitionID, competitionName string) *PolymarketNormaliser {
-	return &PolymarketNormaliser{competitionID: competitionID, competitionName: competitionName}
+// NewPolymarketNormaliser creates a normaliser for a sport competition.
+// sportID/sportName are emitted on catalog.upsert events (e.g. "basketball"/"Basketball").
+func NewPolymarketNormaliser(sportID, sportName, competitionID, competitionName string) *PolymarketNormaliser {
+	return &PolymarketNormaliser{
+		sportID:         sportID,
+		sportName:       sportName,
+		competitionID:   competitionID,
+		competitionName: competitionName,
+	}
 }
 
 func (n *PolymarketNormaliser) Normalise(raw RawProviderEvent) ([]NormalisedMarketEvent, error) {
@@ -101,8 +106,8 @@ func (n *PolymarketNormaliser) Normalise(raw RawProviderEvent) ([]NormalisedMark
 			events = append(events, NormalisedMarketEvent{
 				EventType:       "catalog.upsert",
 				ProviderID:      "polymarket",
-				SportID:         sportID,
-				SportName:       sportName,
+				SportID:         n.sportID,
+				SportName:       n.sportName,
 				CompetitionID:   n.competitionID,
 				CompetitionName: n.competitionName,
 				Country:         "US",

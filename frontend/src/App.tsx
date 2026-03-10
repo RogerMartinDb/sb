@@ -42,6 +42,13 @@ const SPORTS: Sport[] = [
     ],
   },
   {
+    id: 'hockey',
+    label: 'Hockey',
+    competitions: [
+      { id: 'nhl', label: 'NHL' },
+    ],
+  },
+  {
     id: 'politics',
     label: 'Politics',
     competitions: [
@@ -57,7 +64,7 @@ interface LeftMenuProps {
 }
 
 function LeftMenu({ selected, onSelect }: LeftMenuProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ basketball: true, politics: true })
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ basketball: true, hockey: true, politics: true })
   const isMobile = useIsMobile()
 
   return (

@@ -1,5 +1,5 @@
-// NBA and NCAAB team metadata: display names and ESPN CDN logo URLs.
-// Keyed by the Polymarket outcome name (nickname) for NBA,
+// NBA, NCAAB, and NHL team metadata: display names and ESPN CDN logo URLs.
+// Keyed by the Polymarket outcome name (nickname) for NBA/NHL,
 // and by Polymarket location/display name for NCAAB.
 
 export interface TeamMeta {
@@ -13,6 +13,9 @@ const espnNBA = (abbr: string) =>
 
 const espnNCAAB = (id: number) =>
   `https://a.espncdn.com/i/teamlogos/ncaa/500/${id}.png`
+
+const espnNHL = (abbr: string) =>
+  `https://a.espncdn.com/i/teamlogos/nhl/500/${abbr.toLowerCase()}.png`
 
 // All 30 NBA teams, keyed by the nickname Polymarket uses in outcomes.
 export const NBA_TEAMS: Record<string, TeamMeta> = {
@@ -145,27 +148,64 @@ export const NCAAB_TEAMS: Record<string, TeamMeta> = {
   'Loyola Chicago':     { abbr: 'LUC',  city: 'Loyola Chicago',    logo: espnNCAAB(2350) },
 }
 
-// Lookup: try NBA first, then NCAAB.
+// All 32 NHL teams, keyed by the nickname Polymarket uses in outcomes.
+export const NHL_TEAMS: Record<string, TeamMeta> = {
+  'Ducks':          { abbr: 'ANA', city: 'Anaheim',       logo: espnNHL('ana') },
+  'Bruins':         { abbr: 'BOS', city: 'Boston',        logo: espnNHL('bos') },
+  'Sabres':         { abbr: 'BUF', city: 'Buffalo',       logo: espnNHL('buf') },
+  'Flames':         { abbr: 'CGY', city: 'Calgary',       logo: espnNHL('cgy') },
+  'Hurricanes':     { abbr: 'CAR', city: 'Carolina',      logo: espnNHL('car') },
+  'Blackhawks':     { abbr: 'CHI', city: 'Chicago',       logo: espnNHL('chi') },
+  'Avalanche':      { abbr: 'COL', city: 'Colorado',      logo: espnNHL('col') },
+  'Blue Jackets':   { abbr: 'CBJ', city: 'Columbus',      logo: espnNHL('cbj') },
+  'Stars':          { abbr: 'DAL', city: 'Dallas',        logo: espnNHL('dal') },
+  'Red Wings':      { abbr: 'DET', city: 'Detroit',       logo: espnNHL('det') },
+  'Oilers':         { abbr: 'EDM', city: 'Edmonton',      logo: espnNHL('edm') },
+  'Panthers':       { abbr: 'FLA', city: 'Florida',       logo: espnNHL('fla') },
+  'Kings':          { abbr: 'LAK', city: 'Los Angeles',   logo: espnNHL('lak') },
+  'Wild':           { abbr: 'MIN', city: 'Minnesota',     logo: espnNHL('min') },
+  'Canadiens':      { abbr: 'MTL', city: 'Montréal',      logo: espnNHL('mtl') },
+  'Predators':      { abbr: 'NSH', city: 'Nashville',     logo: espnNHL('nsh') },
+  'Devils':         { abbr: 'NJD', city: 'New Jersey',    logo: espnNHL('nj') },
+  'Islanders':      { abbr: 'NYI', city: 'NY Islanders',  logo: espnNHL('nyi') },
+  'Rangers':        { abbr: 'NYR', city: 'NY Rangers',    logo: espnNHL('nyr') },
+  'Senators':       { abbr: 'OTT', city: 'Ottawa',        logo: espnNHL('ott') },
+  'Flyers':         { abbr: 'PHI', city: 'Philadelphia',  logo: espnNHL('phi') },
+  'Penguins':       { abbr: 'PIT', city: 'Pittsburgh',    logo: espnNHL('pit') },
+  'Blues':          { abbr: 'STL', city: 'St. Louis',     logo: espnNHL('stl') },
+  'Sharks':         { abbr: 'SJS', city: 'San Jose',      logo: espnNHL('sjs') },
+  'Kraken':         { abbr: 'SEA', city: 'Seattle',       logo: espnNHL('sea') },
+  'Lightning':      { abbr: 'TBL', city: 'Tampa Bay',     logo: espnNHL('tb') },
+  'Maple Leafs':    { abbr: 'TOR', city: 'Toronto',       logo: espnNHL('tor') },
+  'Utah HC':        { abbr: 'UTA', city: 'Utah',          logo: espnNHL('utah') },
+  'Canucks':        { abbr: 'VAN', city: 'Vancouver',     logo: espnNHL('van') },
+  'Golden Knights': { abbr: 'VGK', city: 'Vegas',         logo: espnNHL('vgk') },
+  'Capitals':       { abbr: 'WSH', city: 'Washington',    logo: espnNHL('wsh') },
+  'Jets':           { abbr: 'WPG', city: 'Winnipeg',      logo: espnNHL('wpg') },
+}
+
+// Lookup: try NBA, NCAAB, or NHL by competition.
 export function getTeamMeta(name: string, competitionId: string): TeamMeta | undefined {
-  if (competitionId === 'nba') {
-    return NBA_TEAMS[name]
-  }
-  if (competitionId === 'ncaab') {
-    return NCAAB_TEAMS[name]
-  }
+  if (competitionId === 'nba') return NBA_TEAMS[name]
+  if (competitionId === 'ncaab') return NCAAB_TEAMS[name]
+  if (competitionId === 'nhl') return NHL_TEAMS[name]
   return undefined
 }
 
-// Format the display name: "PHI 76ers" for NBA, original name for others.
+// Format the display name: "PHI 76ers" / "BOS Bruins" on desktop; original for others.
 export function formatTeamName(name: string, competitionId: string): string {
   if (competitionId === 'nba') {
     const meta = NBA_TEAMS[name]
     return meta ? `${meta.abbr} ${name}` : name
   }
+  if (competitionId === 'nhl') {
+    const meta = NHL_TEAMS[name]
+    return meta ? `${meta.abbr} ${name}` : name
+  }
   return name
 }
 
-// Short form: abbr only for NBA/NCAAB, original name for others.
+// Short form: abbr only for NBA/NCAAB/NHL, original name for others.
 export function formatTeamNameShort(name: string, competitionId: string): string {
   const meta = getTeamMeta(name, competitionId)
   return meta ? meta.abbr : name

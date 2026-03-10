@@ -62,6 +62,19 @@ func NewNCAABFeed(eventMatcher *EventMatcher, tokenRegistry *TokenRegistry, logg
 	}
 }
 
+// NewNHLFeed creates a feed for NHL events (tag 899, slug prefix "nhl-").
+func NewNHLFeed(eventMatcher *EventMatcher, tokenRegistry *TokenRegistry, logger *slog.Logger) *PolymarketFeed {
+	return &PolymarketFeed{
+		client:        polymarket.NewClient(logger),
+		eventMatcher:  eventMatcher,
+		tokenRegistry: tokenRegistry,
+		logger:        logger,
+		providerID:    "polymarket-nhl",
+		slugPrefix:    "nhl-",
+		tagID:         polymarket.NHLTagID,
+	}
+}
+
 func (f *PolymarketFeed) Subscribe(ctx context.Context) (<-chan RawProviderEvent, error) {
 	ch := make(chan RawProviderEvent, 64)
 	go func() {
