@@ -10,7 +10,14 @@ import (
 	"time"
 )
 
-const ncaabScoreboardURL = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
+// ncaabScoreboardURLs lists the ESPN scoreboard URLs we poll. The default
+// endpoint only returns a handful of "top" games. groups=50 covers conference
+// tournaments; groups=100 covers the NCAA tournament / NIT.
+var ncaabScoreboardURLs = []string{
+	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
+	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=50",
+	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=100",
+}
 
 // ESPNGame is the relevant subset of a game from the ESPN scoreboard API.
 type ESPNGame struct {
@@ -105,6 +112,7 @@ func (f *NCAABScoreFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 
 		eventID, ok := f.eventMatcher.FindByTeams(homeTeam, awayTeam)
 		if !ok {
+			f.logger.Debug("ncaab score feed: no event match", "home", homeTeam, "away", awayTeam)
 			continue
 		}
 
@@ -132,7 +140,34 @@ func (f *NCAABScoreFeed) poll(ctx context.Context, ch chan<- RawProviderEvent) {
 }
 
 func (f *NCAABScoreFeed) fetchScoreboard(ctx context.Context) ([]ESPNGame, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ncaabScoreboardURL, nil)
+	seen := make(map[string]bool)
+	var all []ESPNGame
+
+	for _, url := range ncaabScoreboardURLs {
+		games, err := f.fetchURL(ctx, url)
+		if err != nil {
+			f.logger.Warn("ncaab score feed: fetch url failed", "url", url, "err", err)
+			continue
+		}
+		for _, g := range games {
+			// Deduplicate by building a key from team names.
+			key := gameDedupeKey(g)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			all = append(all, g)
+		}
+	}
+
+	if len(all) == 0 && len(seen) == 0 {
+		return nil, fmt.Errorf("all scoreboard URLs failed")
+	}
+	return all, nil
+}
+
+func (f *NCAABScoreFeed) fetchURL(ctx context.Context, url string) ([]ESPNGame, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
@@ -154,6 +189,23 @@ func (f *NCAABScoreFeed) fetchScoreboard(ctx context.Context) ([]ESPNGame, error
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return sb.Events, nil
+}
+
+// gameDedupeKey returns a string key for deduplicating ESPN games across
+// different group endpoints.
+func gameDedupeKey(g ESPNGame) string {
+	if len(g.Competitions) == 0 || len(g.Competitions[0].Competitors) < 2 {
+		return ""
+	}
+	var home, away string
+	for _, c := range g.Competitions[0].Competitors {
+		if c.HomeAway == "home" {
+			home = c.Team.DisplayName
+		} else {
+			away = c.Team.DisplayName
+		}
+	}
+	return away + "@" + home
 }
 
 // ncaabTeamName returns the best team name for EventMatcher lookups.
