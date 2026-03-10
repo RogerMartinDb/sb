@@ -6,6 +6,7 @@ export interface TeamMeta {
   abbr: string
   city: string
   logo: string
+  whiteBg?: boolean  // logo needs a white background (dark/transparent on dark page)
 }
 
 const espnNBA = (abbr: string) =>
@@ -162,7 +163,9 @@ export const NHL_TEAMS: Record<string, TeamMeta> = {
   'Red Wings':      { abbr: 'DET', city: 'Detroit',       logo: espnNHL('det') },
   'Oilers':         { abbr: 'EDM', city: 'Edmonton',      logo: espnNHL('edm') },
   'Panthers':       { abbr: 'FLA', city: 'Florida',       logo: espnNHL('fla') },
-  'Kings':          { abbr: 'LAK', city: 'Los Angeles',   logo: espnNHL('lak') },
+  'Kings':          { abbr: 'LAK', city: 'Los Angeles',   logo: espnNHL('la') },
+  'Los Angeles Kings': { abbr: 'LAK', city: 'Los Angeles', logo: espnNHL('la') },
+  'Los Angeles':    { abbr: 'LAK', city: 'Los Angeles',   logo: espnNHL('la') },
   'Wild':           { abbr: 'MIN', city: 'Minnesota',     logo: espnNHL('min') },
   'Canadiens':      { abbr: 'MTL', city: 'Montréal',      logo: espnNHL('mtl') },
   'Predators':      { abbr: 'NSH', city: 'Nashville',     logo: espnNHL('nsh') },
@@ -173,15 +176,23 @@ export const NHL_TEAMS: Record<string, TeamMeta> = {
   'Flyers':         { abbr: 'PHI', city: 'Philadelphia',  logo: espnNHL('phi') },
   'Penguins':       { abbr: 'PIT', city: 'Pittsburgh',    logo: espnNHL('pit') },
   'Blues':          { abbr: 'STL', city: 'St. Louis',     logo: espnNHL('stl') },
-  'Sharks':         { abbr: 'SJS', city: 'San Jose',      logo: espnNHL('sjs') },
-  'Kraken':         { abbr: 'SEA', city: 'Seattle',       logo: espnNHL('sea') },
-  'Lightning':      { abbr: 'TBL', city: 'Tampa Bay',     logo: espnNHL('tb') },
-  'Maple Leafs':    { abbr: 'TOR', city: 'Toronto',       logo: espnNHL('tor') },
-  'Utah HC':        { abbr: 'UTA', city: 'Utah',          logo: espnNHL('utah') },
-  'Canucks':        { abbr: 'VAN', city: 'Vancouver',     logo: espnNHL('van') },
-  'Golden Knights': { abbr: 'VGK', city: 'Vegas',         logo: espnNHL('vgk') },
-  'Capitals':       { abbr: 'WSH', city: 'Washington',    logo: espnNHL('wsh') },
-  'Jets':           { abbr: 'WPG', city: 'Winnipeg',      logo: espnNHL('wpg') },
+  'Sharks':              { abbr: 'SJS', city: 'San Jose',  logo: espnNHL('sj') },
+  'San Jose Sharks':     { abbr: 'SJS', city: 'San Jose',  logo: espnNHL('sj') },
+  'San Jose':            { abbr: 'SJS', city: 'San Jose',  logo: espnNHL('sj') },
+  'Kraken':              { abbr: 'SEA', city: 'Seattle',   logo: espnNHL('sea') },
+  'Lightning':           { abbr: 'TBL', city: 'Tampa Bay', logo: espnNHL('tb'), whiteBg: true },
+  'Tampa Bay Lightning': { abbr: 'TBL', city: 'Tampa Bay', logo: espnNHL('tb'), whiteBg: true },
+  'Tampa Bay':           { abbr: 'TBL', city: 'Tampa Bay', logo: espnNHL('tb'), whiteBg: true },
+  'Maple Leafs':         { abbr: 'TOR', city: 'Toronto',   logo: espnNHL('tor') },
+  'Utah HC':             { abbr: 'UTA', city: 'Utah',      logo: espnNHL('utah') },
+  'Utah Hockey Club':    { abbr: 'UTA', city: 'Utah',      logo: espnNHL('utah') },
+  'Utah':                { abbr: 'UTA', city: 'Utah',      logo: espnNHL('utah') },
+  'Canucks':             { abbr: 'VAN', city: 'Vancouver', logo: espnNHL('van') },
+  'Golden Knights':      { abbr: 'VGK', city: 'Vegas',     logo: espnNHL('vgk') },
+  'Capitals':            { abbr: 'WSH', city: 'Washington', logo: espnNHL('wsh'), whiteBg: true },
+  'Washington Capitals': { abbr: 'WSH', city: 'Washington', logo: espnNHL('wsh'), whiteBg: true },
+  'Washington':          { abbr: 'WSH', city: 'Washington', logo: espnNHL('wsh'), whiteBg: true },
+  'Jets':                { abbr: 'WPG', city: 'Winnipeg',  logo: espnNHL('wpg') },
 }
 
 // Lookup: try NBA, NCAAB, or NHL by competition.

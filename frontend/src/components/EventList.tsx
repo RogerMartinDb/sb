@@ -73,7 +73,11 @@ function TeamIcon({ name, competitionId }: { name: string; competitionId: string
       alt=""
       width={18}
       height={18}
-      style={{ flexShrink: 0, objectFit: 'contain' }}
+      style={{
+        flexShrink: 0,
+        objectFit: 'contain',
+        ...(meta.whiteBg && { background: '#fff', borderRadius: 2, padding: 1 }),
+      }}
       onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
     />
   )
