@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { type Event, type Market, type Selection } from '../api'
 import { useEventsWS, type ScoreFlashSide } from '../hooks/useEventsWS'
+import { getTeamMeta, formatTeamName } from '../teamMeta'
 
 export interface SelectedBet {
   market_id: string
@@ -54,6 +55,21 @@ const C = {
   selText:       '#071222',
   live:          '#e74c3c',
   liveGlow:      'rgba(231, 76, 60, 0.25)',
+}
+
+function TeamIcon({ name, competitionId }: { name: string; competitionId: string }) {
+  const meta = getTeamMeta(name, competitionId)
+  if (!meta) return null
+  return (
+    <img
+      src={meta.logo}
+      alt=""
+      width={18}
+      height={18}
+      style={{ flexShrink: 0, objectFit: 'contain' }}
+      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
+  )
 }
 
 function dateKey(iso: string): string {
@@ -501,8 +517,12 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}>
-                    {teamSel.name}
+                    <TeamIcon name={teamSel.name} competitionId={ev.competition_id} />
+                    {formatTeamName(teamSel.name, ev.competition_id)}
                   </span>
                   {ev.status === 'LIVE' && (
                     <span
@@ -633,8 +653,12 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
                             }}>
-                              {rows[si]?.name ?? sel.name}
+                              <TeamIcon name={rows[si]?.name ?? sel.name} competitionId={ev.competition_id} />
+                              {formatTeamName(rows[si]?.name ?? sel.name, ev.competition_id)}
                             </div>
                             <div style={{ borderLeft: `1px solid ${C.border}`, padding: '5px 7px' }}>
                               <button
