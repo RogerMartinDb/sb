@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { type Event, type Market, type Selection } from '../api'
 import { useEventsWS, type ScoreFlashSide } from '../hooks/useEventsWS'
-import { getTeamMeta, formatTeamName } from '../teamMeta'
+import { useIsMobile } from '../hooks/useIsMobile'
+import { getTeamMeta, formatTeamName, formatTeamNameShort } from '../teamMeta'
 
 export interface SelectedBet {
   market_id: string
@@ -93,6 +94,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [altOpen, setAltOpen] = useState<Record<string, boolean>>({})
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     // Inject pulse animation for live indicator.
@@ -400,7 +402,8 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
         // active columns (only those with data)
         const activeCols = COLS.filter(c => byType[c.type])
 
-        const gridCols = `1fr ${activeCols.map(() => '96px').join(' ')}`
+        const colW = isMobile ? '72px' : '96px'
+        const gridCols = `1fr ${activeCols.map(() => colW).join(' ')}`
 
         const altSpreads = ev.markets.filter(m => !m.is_main && m.market_type === 'SPREAD')
         const altTotals  = ev.markets.filter(m => !m.is_main && m.market_type === 'TOTAL')
@@ -504,14 +507,14 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
               }}>
                 {/* Team name + score */}
                 <div style={{
-                  padding: '10px 14px',
+                  padding: isMobile ? '7px 8px' : '10px 14px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 8,
+                  gap: isMobile ? 4 : 8,
                 }}>
                   <span style={{
-                    fontSize: 13,
+                    fontSize: isMobile ? 11 : 13,
                     fontWeight: 600,
                     color: C.text,
                     whiteSpace: 'nowrap',
@@ -521,14 +524,16 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                     alignItems: 'center',
                     gap: 6,
                   }}>
-                    <TeamIcon name={teamSel.name} competitionId={ev.competition_id} />
-                    {formatTeamName(teamSel.name, ev.competition_id)}
+                    {!isMobile && <TeamIcon name={teamSel.name} competitionId={ev.competition_id} />}
+                    {isMobile
+                      ? formatTeamNameShort(teamSel.name, ev.competition_id)
+                      : formatTeamName(teamSel.name, ev.competition_id)}
                   </span>
                   {ev.status === 'LIVE' && (
                     <span
                       key={i === 0 ? `away-${ev.away_score}` : `home-${ev.home_score}`}
                       style={{
-                        fontSize: 15,
+                        fontSize: isMobile ? 12 : 15,
                         fontWeight: 800,
                         color: C.text,
                         fontVariantNumeric: 'tabular-nums',
@@ -554,7 +559,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                   return (
                     <div key={col.label} style={{
                       borderLeft: `1px solid ${C.border}`,
-                      padding: '6px 7px',
+                      padding: isMobile ? '4px 4px' : '6px 7px',
                     }}>
                       <button
                         disabled={disabled}
@@ -572,7 +577,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                         }}
                         style={{
                           width: '100%',
-                          padding: '7px 2px',
+                          padding: isMobile ? '5px 2px' : '7px 2px',
                           border: active
                             ? `1.5px solid ${C.gold}`
                             : `1px solid ${disabled ? 'transparent' : C.btnBorder}`,
@@ -590,7 +595,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                           <>
                             {col.type !== 'ML' && (
                               <div style={{
-                                fontSize: 10,
+                                fontSize: isMobile ? 9 : 10,
                                 color: active ? C.selText : C.muted,
                                 marginBottom: 1,
                                 fontWeight: 600,
@@ -599,7 +604,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                               </div>
                             )}
                             <div style={{
-                              fontSize: 13,
+                              fontSize: isMobile ? 11 : 13,
                               fontWeight: 700,
                               color: active ? C.selText : C.btnOdds,
                             }}>
@@ -607,7 +612,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                             </div>
                           </>
                         ) : (
-                          <div style={{ fontSize: 13, color: C.border }}>—</div>
+                          <div style={{ fontSize: isMobile ? 11 : 13, color: C.border }}>—</div>
                         )}
                       </button>
                     </div>
@@ -647,8 +652,8 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                             alignItems: 'center',
                           }}>
                             <div style={{
-                              padding: '8px 14px',
-                              fontSize: 12,
+                              padding: isMobile ? '6px 8px' : '8px 14px',
+                              fontSize: isMobile ? 11 : 12,
                               color: C.muted,
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
@@ -657,8 +662,10 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                               alignItems: 'center',
                               gap: 6,
                             }}>
-                              <TeamIcon name={rows[si]?.name ?? sel.name} competitionId={ev.competition_id} />
-                              {formatTeamName(rows[si]?.name ?? sel.name, ev.competition_id)}
+                              {!isMobile && <TeamIcon name={rows[si]?.name ?? sel.name} competitionId={ev.competition_id} />}
+                              {isMobile
+                                ? formatTeamNameShort(rows[si]?.name ?? sel.name, ev.competition_id)
+                                : formatTeamName(rows[si]?.name ?? sel.name, ev.competition_id)}
                             </div>
                             <div style={{ borderLeft: `1px solid ${C.border}`, padding: '5px 7px' }}>
                               <button

@@ -164,3 +164,9 @@ export function formatTeamName(name: string, competitionId: string): string {
   }
   return name
 }
+
+// Short form: abbr only for NBA/NCAAB, original name for others.
+export function formatTeamNameShort(name: string, competitionId: string): string {
+  const meta = getTeamMeta(name, competitionId)
+  return meta ? meta.abbr : name
+}

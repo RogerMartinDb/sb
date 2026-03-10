@@ -5,6 +5,7 @@ import MyBets from './components/MyBets'
 import Login from './components/Login'
 import Register from './components/Register'
 import { setAuthToken } from './api'
+import { useIsMobile } from './hooks/useIsMobile'
 
 type Tab = 'events' | 'mybets'
 type AuthModal = 'login' | 'register' | null
@@ -49,6 +50,7 @@ const SPORTS: Sport[] = [
   },
 ]
 
+
 interface LeftMenuProps {
   selected: string
   onSelect: (id: string) => void
@@ -56,14 +58,15 @@ interface LeftMenuProps {
 
 function LeftMenu({ selected, onSelect }: LeftMenuProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ basketball: true, politics: true })
+  const isMobile = useIsMobile()
 
   return (
     <div style={{
-      width: 160,
+      width: isMobile ? '100%' : 160,
       flexShrink: 0,
       background: C.sidebar,
       border: `1px solid ${C.border}`,
-      borderRadius: 10,
+      borderRadius: isMobile ? 0 : 10,
       overflow: 'hidden',
       alignSelf: 'flex-start',
       fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
@@ -184,6 +187,8 @@ export default function App() {
   const [authModal, setAuthModal] = useState<AuthModal>(null)
   const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null)
   const [competitionFilter, setCompetitionFilter] = useState<string>('nba')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const isMobile = useIsMobile()
 
   function handleAuth(t: string, e: string) {
     setAuthToken(t)
@@ -234,9 +239,37 @@ export default function App() {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.gold, margin: 0, letterSpacing: '0.05em' }}>
-            SPORTSBOOK
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {isMobile && tab === 'events' && (
+              <button
+                onClick={() => setMenuOpen(o => !o)}
+                aria-label="Toggle navigation"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 5,
+                  justifyContent: 'center',
+                }}
+              >
+                {[0, 1, 2].map(i => (
+                  <span key={i} style={{
+                    display: 'block',
+                    width: 22,
+                    height: 2,
+                    background: C.gold,
+                    borderRadius: 2,
+                  }} />
+                ))}
+              </button>
+            )}
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.gold, margin: 0, letterSpacing: '0.05em' }}>
+              SPORTSBOOK
+            </h1>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {token && email ? (
               <>
@@ -292,7 +325,56 @@ export default function App() {
 
         {tab === 'events' ? (
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <LeftMenu selected={competitionFilter} onSelect={(id) => setCompetitionFilter(id)} />
+            {/* Mobile drawer overlay */}
+            {isMobile && menuOpen && (
+              <div
+                onClick={() => setMenuOpen(false)}
+                style={{
+                  position: 'fixed', inset: 0,
+                  background: 'rgba(0,0,0,0.55)',
+                  zIndex: 200,
+                }}
+              />
+            )}
+            {/* Left menu — sidebar on desktop, slide-in drawer on mobile */}
+            <div style={isMobile ? {
+              position: 'fixed',
+              top: 0,
+              left: menuOpen ? 0 : -200,
+              width: 200,
+              height: '100%',
+              zIndex: 201,
+              background: C.sidebar,
+              transition: 'left 0.25s ease',
+              overflowY: 'auto',
+              paddingTop: 16,
+            } : {}}>
+              {isMobile && (
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Close menu"
+                  style={{
+                    display: 'block',
+                    marginLeft: 'auto',
+                    marginRight: 12,
+                    marginBottom: 8,
+                    background: 'none',
+                    border: 'none',
+                    color: C.muted,
+                    fontSize: 20,
+                    cursor: 'pointer',
+                    lineHeight: 1,
+                  }}
+                >✕</button>
+              )}
+              <LeftMenu
+                selected={competitionFilter}
+                onSelect={(id) => {
+                  setCompetitionFilter(id)
+                  setMenuOpen(false)
+                }}
+              />
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <EventList
                 onSelectBet={setSelectedBet}
