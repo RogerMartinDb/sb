@@ -80,9 +80,9 @@ export default function MyBets({ oddsFormat = 'american' }: Props) {
             <div style={{ fontSize: 13, marginBottom: 4 }}>
               Odds: <strong>{formatOdds(bet.odds_decimal, bet.odds_american, oddsFormat)}</strong>
               {' · '}
-              Stake: <strong>£{(bet.stake_minor / 100).toFixed(2)}</strong>
+              Stake: <strong>${(bet.stake_minor / 100).toFixed(2)}</strong>
               {bet.payout_minor != null && (
-                <>{' · '}Payout: <strong>£{(bet.payout_minor / 100).toFixed(2)}</strong></>
+                <>{' · '}Payout: <strong>${(bet.payout_minor / 100).toFixed(2)}</strong></>
               )}
             </div>
 

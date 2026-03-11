@@ -27,7 +27,7 @@ build:
 
 # ── Kill all running services ────────────────────────────────────────────────
 kill-all:
-	@for svc in betacceptance wallet catalog odds marketdata bethistory settlement identity; do \
+	@for svc in betacceptance wallet catalog odds marketdata bethistory settlement identity cashier; do \
 		pkill -x $$svc 2>/dev/null || true; \
 	done
 	@echo "all services stopped"
@@ -44,6 +44,7 @@ run-all:
 	go run ./cmd/bethistory    2>&1 | sed "s/^/$${e}[36m[bethistory   ]$${e}[0m /" & \
 	go run ./cmd/settlement    2>&1 | sed "s/^/$${e}[91m[settlement   ]$${e}[0m /" & \
 	go run ./cmd/identity      2>&1 | sed "s/^/$${e}[92m[identity     ]$${e}[0m /" & \
+	go run ./cmd/cashier       2>&1 | sed "s/^/$${e}[93m[cashier      ]$${e}[0m /" & \
 	wait
 
 # ── Run individual services ───────────────────────────────────────────────────
@@ -71,14 +72,20 @@ run-identity:
 run-marketdata:
 	go run ./cmd/marketdata
 
+run-cashier:
+	go run ./cmd/cashier
+
 # ── Migrations ────────────────────────────────────────────────────────────────
-migrate-all: migrate-bet-acceptance migrate-wallet migrate-odds migrate-catalog migrate-bet-history migrate-settlement migrate-identity
+migrate-all: migrate-bet-acceptance migrate-wallet migrate-cashier migrate-odds migrate-catalog migrate-bet-history migrate-settlement migrate-identity
 
 migrate-bet-acceptance:
 	psql "postgres://sb:sb_secret@localhost:15432/db_bet_acceptance" -f migrations/db_bet_acceptance/001_init.sql
 
 migrate-wallet:
 	psql "postgres://sb:sb_secret@localhost:5433/db_wallet" -f migrations/db_wallet/001_init.sql
+
+migrate-cashier:
+	psql "postgres://sb:sb_secret@localhost:5433/db_wallet" -f migrations/db_wallet/002_usd_and_cashier_types.sql
 
 migrate-odds:
 	psql "postgres://sb:sb_secret@localhost:5434/db_odds" -f migrations/db_odds/001_init.sql

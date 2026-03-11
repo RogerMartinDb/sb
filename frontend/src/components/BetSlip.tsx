@@ -41,7 +41,7 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
         odds_decimal: selectedBet.odds_decimal,
         odds_american: selectedBet.odds_american,
         stake_minor: stakeMinor,
-        currency: 'GBP',
+        currency: 'USD',
       }, crypto.randomUUID())
       setResult(resp)
     } catch (err) {
@@ -61,7 +61,7 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
         <h3 style={{ color: '#4caf50' }}>Bet Accepted</h3>
         <p>Bet ID: <code>{result.bet_id}</code></p>
         <p>Odds: {formatOdds(result.odds_decimal, result.odds_american, oddsFormat)}</p>
-        <p>Stake: £{(result.stake / 100).toFixed(2)}</p>
+        <p>Stake: ${(result.stake / 100).toFixed(2)}</p>
         <button onClick={() => { setResult(null); setStake(''); onClear() }}>
           Place Another Bet
         </button>
@@ -83,7 +83,7 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
 
       <div style={{ marginBottom: 12 }}>
         <label>
-          Stake (£)
+          Stake ($)
           <br />
           <input
             type="number"
@@ -99,7 +99,7 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
 
       {stake && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
         <p style={{ fontSize: 13, color: '#555' }}>
-          Potential return: £{(parseFloat(stake) * selectedBet.odds_decimal).toFixed(2)}
+          Potential return: ${(parseFloat(stake) * selectedBet.odds_decimal).toFixed(2)}
         </p>
       )}
 

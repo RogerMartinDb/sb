@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -306,9 +307,156 @@ func creditReasonToEntryType(r sbv1.CreditReason) string {
 		return "CREDIT_VOID"
 	case sbv1.CreditReason_CREDIT_REASON_PUSH:
 		return "CREDIT_PUSH"
+	case sbv1.CreditReason_CREDIT_REASON_DEPOSIT:
+		return "CREDIT_DEPOSIT"
 	default:
 		return "CREDIT"
 	}
+}
+
+// Deposit credits a user's balance via the cashier.
+func (s *Service) Deposit(ctx context.Context, req *sbv1.DepositRequest) (*sbv1.DepositResponse, error) {
+	if req.TransactionId == "" || req.UserId == "" || req.Amount == nil {
+		return nil, status.Error(codes.InvalidArgument, "transaction_id, user_id and amount are required")
+	}
+
+	// Idempotency check
+	var existing string
+	err := s.db.QueryRow(ctx,
+		`SELECT transaction_id FROM ledger_entries WHERE transaction_id = $1`,
+		req.TransactionId).Scan(&existing)
+	if err == nil {
+		// Already processed - fetch current balance
+		var availMinor int64
+		var currency string
+		_ = s.db.QueryRow(ctx,
+			`SELECT available_minor, currency FROM balances WHERE user_id = $1`,
+			req.UserId).Scan(&availMinor, &currency)
+		return &sbv1.DepositResponse{
+			TransactionId:  req.TransactionId,
+			Status:         sbv1.LedgerEntryStatus_LEDGER_ENTRY_STATUS_CONFIRMED,
+			AvailableAfter: &sbv1.Money{AmountMinor: availMinor, Currency: currency},
+		}, nil
+	}
+	if err != pgx.ErrNoRows {
+		return nil, status.Errorf(codes.Internal, "idempotency check: %v", err)
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, req.UserId); err != nil {
+		return nil, status.Errorf(codes.Internal, "advisory lock: %v", err)
+	}
+
+	var availMinor int64
+	var currency string
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO balances (user_id, available_minor, bets_in_flight_minor, currency)
+		 VALUES ($2, $1, 0, 'USD')
+		 ON CONFLICT (user_id) DO UPDATE
+		   SET available_minor = balances.available_minor + $1, updated_at = NOW()
+		 RETURNING available_minor, currency`,
+		req.Amount.AmountMinor, req.UserId).Scan(&availMinor, &currency); err != nil {
+		return nil, status.Errorf(codes.Internal, "update balance: %v", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO ledger_entries (transaction_id, user_id, stake_minor, currency, entry_type, status, payment_method)
+		 VALUES ($1, $2, $3, $4, 'CREDIT_DEPOSIT', 'CONFIRMED', $5)`,
+		req.TransactionId, req.UserId, req.Amount.AmountMinor, currency, req.PaymentMethod); err != nil {
+		return nil, status.Errorf(codes.Internal, "insert ledger: %v", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(codes.Internal, "commit: %v", err)
+	}
+
+	s.logger.Info("wallet: deposit", "user_id", req.UserId, "amount", req.Amount.AmountMinor, "available_after", availMinor)
+
+	return &sbv1.DepositResponse{
+		TransactionId:  req.TransactionId,
+		Status:         sbv1.LedgerEntryStatus_LEDGER_ENTRY_STATUS_CONFIRMED,
+		AvailableAfter: &sbv1.Money{AmountMinor: availMinor, Currency: currency},
+	}, nil
+}
+
+// Withdraw debits a user's balance via the cashier.
+func (s *Service) Withdraw(ctx context.Context, req *sbv1.WithdrawRequest) (*sbv1.WithdrawResponse, error) {
+	if req.TransactionId == "" || req.UserId == "" || req.Amount == nil {
+		return nil, status.Error(codes.InvalidArgument, "transaction_id, user_id and amount are required")
+	}
+
+	// Idempotency check
+	var existing string
+	err := s.db.QueryRow(ctx,
+		`SELECT transaction_id FROM ledger_entries WHERE transaction_id = $1`,
+		req.TransactionId).Scan(&existing)
+	if err == nil {
+		var availMinor int64
+		var currency string
+		_ = s.db.QueryRow(ctx,
+			`SELECT available_minor, currency FROM balances WHERE user_id = $1`,
+			req.UserId).Scan(&availMinor, &currency)
+		return &sbv1.WithdrawResponse{
+			TransactionId:  req.TransactionId,
+			Status:         sbv1.LedgerEntryStatus_LEDGER_ENTRY_STATUS_CONFIRMED,
+			AvailableAfter: &sbv1.Money{AmountMinor: availMinor, Currency: currency},
+		}, nil
+	}
+	if err != pgx.ErrNoRows {
+		return nil, status.Errorf(codes.Internal, "idempotency check: %v", err)
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, req.UserId); err != nil {
+		return nil, status.Errorf(codes.Internal, "advisory lock: %v", err)
+	}
+
+	var availMinor int64
+	var currency string
+	if err := tx.QueryRow(ctx,
+		`SELECT available_minor, currency FROM balances WHERE user_id = $1 FOR UPDATE`,
+		req.UserId).Scan(&availMinor, &currency); err != nil {
+		return nil, status.Errorf(codes.Internal, "get balance: %v", err)
+	}
+
+	if availMinor < req.Amount.AmountMinor {
+		return nil, status.Error(codes.FailedPrecondition, "INSUFFICIENT_FUNDS")
+	}
+
+	if err := tx.QueryRow(ctx,
+		`UPDATE balances SET available_minor = available_minor - $1, updated_at = NOW() WHERE user_id = $2 RETURNING available_minor, currency`,
+		req.Amount.AmountMinor, req.UserId).Scan(&availMinor, &currency); err != nil {
+		return nil, status.Errorf(codes.Internal, "update balance: %v", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO ledger_entries (transaction_id, user_id, stake_minor, currency, entry_type, status, payment_method)
+		 VALUES ($1, $2, $3, $4, 'DEBIT_WITHDRAWAL', 'CONFIRMED', $5)`,
+		req.TransactionId, req.UserId, req.Amount.AmountMinor, currency, req.PaymentMethod); err != nil {
+		return nil, status.Errorf(codes.Internal, "insert ledger: %v", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(codes.Internal, "commit: %v", err)
+	}
+
+	s.logger.Info("wallet: withdraw", "user_id", req.UserId, "amount", req.Amount.AmountMinor, "available_after", availMinor)
+
+	return &sbv1.WithdrawResponse{
+		TransactionId:  req.TransactionId,
+		Status:         sbv1.LedgerEntryStatus_LEDGER_ENTRY_STATUS_CONFIRMED,
+		AvailableAfter: &sbv1.Money{AmountMinor: availMinor, Currency: currency},
+	}, nil
 }
 
 // ReconcileStaleTransactions is the backstop job: finds PENDING_CONFIRMATION

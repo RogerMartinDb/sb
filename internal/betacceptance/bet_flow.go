@@ -52,7 +52,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		OddsTolerance:       0.05,
-		LargeStakeThreshold: 10_000, // £100.00
+		LargeStakeThreshold: 10_000, // $100.00
 		KafkaNumPartitions:  24,
 		MarketStatusTTL:     5 * time.Second,
 		OddsCacheTTL:        30 * time.Second,

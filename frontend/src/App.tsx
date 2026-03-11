@@ -4,7 +4,8 @@ import BetSlip from './components/BetSlip'
 import MyBets from './components/MyBets'
 import Login from './components/Login'
 import Register from './components/Register'
-import { setAuthToken } from './api'
+import CashierModal from './components/CashierModal'
+import { setAuthToken, getBalance } from './api'
 import { useIsMobile } from './hooks/useIsMobile'
 
 type Tab = 'events' | 'mybets'
@@ -197,19 +198,29 @@ export default function App() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('nba')
   const [menuOpen, setMenuOpen] = useState(false)
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>('american')
+  const [balance, setBalance] = useState<number | null>(null)
+  const [cashierModal, setCashierModal] = useState<'deposit' | 'withdraw' | null>(null)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const isMobile = useIsMobile()
 
-  function handleAuth(t: string, e: string) {
+  async function handleAuth(t: string, e: string) {
     setAuthToken(t)
     setToken(t)
     setEmail(e)
     setAuthModal(null)
+    try {
+      const bal = await getBalance(t)
+      setBalance(bal.available_minor)
+    } catch {
+      // balance will remain null if cashier is not running
+    }
   }
 
   function handleLogout() {
     setAuthToken(null)
     setToken(null)
     setEmail(null)
+    setBalance(null)
     setTab('events')
   }
 
@@ -244,6 +255,18 @@ export default function App() {
             }
           </div>
         </div>
+      )}
+
+      {cashierModal && token && (
+        <CashierModal
+          mode={cashierModal}
+          token={token}
+          onClose={() => setCashierModal(null)}
+          onSuccess={(newBalanceMinor) => {
+            setBalance(newBalanceMinor)
+            setCashierModal(null)
+          }}
+        />
       )}
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px' }}>
@@ -281,15 +304,64 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {token && email ? (
-              <>
-                <span style={{ color: C.muted, fontSize: 13 }}>{email.split('@')[0]}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
-                  onClick={handleLogout}
-                  style={{ ...btnBase, background: C.active, color: C.text }}
+                  onClick={() => { setCashierModal('deposit') }}
+                  style={{ ...btnBase, background: C.gold, color: '#07152b' }}
                 >
-                  LOGOUT
+                  DEPOSIT
                 </button>
-              </>
+                <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setAccountMenuOpen(o => !o)}
+                  style={{ ...btnBase, background: C.active, color: C.text, display: 'flex', alignItems: 'center', gap: 7 }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                    <circle cx="8" cy="5.5" r="3" fill={C.text} />
+                    <path d="M1.5 14.5c0-3.314 2.91-6 6.5-6s6.5 2.686 6.5 6" stroke={C.text} strokeWidth="1.5" strokeLinecap="round" fill="none" />
+                  </svg>
+                  {balance !== null ? `$${(balance / 100).toFixed(2)}` : ''} ▾
+                </button>
+                {accountMenuOpen && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                    background: C.sidebar, border: `1px solid ${C.border}`, borderRadius: 6,
+                    zIndex: 500, minWidth: 140, overflow: 'hidden',
+                  }}>
+                    <button
+                      onClick={() => { setAccountMenuOpen(false); setCashierModal('deposit') }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        background: 'none', border: 'none', borderBottom: `1px solid ${C.border}`,
+                        color: C.text, fontSize: 13, padding: '10px 14px', cursor: 'pointer',
+                      }}
+                    >
+                      Deposit
+                    </button>
+                    <button
+                      onClick={() => { setAccountMenuOpen(false); setCashierModal('withdraw') }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        background: 'none', border: 'none', borderBottom: `1px solid ${C.border}`,
+                        color: C.text, fontSize: 13, padding: '10px 14px', cursor: 'pointer',
+                      }}
+                    >
+                      Withdraw
+                    </button>
+                    <button
+                      onClick={() => { setAccountMenuOpen(false); handleLogout() }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left',
+                        background: 'none', border: 'none',
+                        color: C.muted, fontSize: 13, padding: '10px 14px', cursor: 'pointer',
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+              </div>
             ) : (
               <>
                 <button

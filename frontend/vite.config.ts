@@ -23,6 +23,10 @@ export default defineConfig({
         target: 'http://localhost:8082',
         rewrite: path => path.replace(/^\/history-api/, ''),
       },
+      '/cashier': {
+        target: 'http://localhost:8085',
+        changeOrigin: true,
+      },
     },
   },
 })

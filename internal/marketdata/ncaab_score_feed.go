@@ -12,11 +12,14 @@ import (
 
 // ncaabScoreboardURLs lists the ESPN scoreboard URLs we poll. The default
 // endpoint only returns a handful of "top" games. groups=50 covers conference
-// tournaments; groups=100 covers the NCAA tournament / NIT.
+// tournaments; groups=100 covers the NCAA tournament / NIT. The limit=500 URL
+// fetches all D1 games regardless of conference, covering mid-majors (e.g.
+// America East) that the curated group endpoints omit.
 var ncaabScoreboardURLs = []string{
 	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard",
 	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=50",
 	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?groups=100",
+	"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?limit=500",
 }
 
 // ESPNGame is the relevant subset of a game from the ESPN scoreboard API.

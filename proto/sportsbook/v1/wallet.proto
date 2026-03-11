@@ -28,6 +28,12 @@ service WalletService {
 
   // GetBalance returns the current available balance for a user.
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+
+  // Deposit credits a user's balance via the cashier.
+  rpc Deposit(DepositRequest) returns (DepositResponse);
+
+  // Withdraw debits a user's balance via the cashier.
+  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse);
 }
 
 // ── GetUserLimits ─────────────────────────────────────────────────────────────
@@ -79,6 +85,7 @@ enum CreditReason {
   CREDIT_REASON_WIN         = 1; // Bet won — credit net winnings
   CREDIT_REASON_VOID        = 2; // Bet voided — refund stake
   CREDIT_REASON_PUSH        = 3; // Pushed — refund stake
+  CREDIT_REASON_DEPOSIT     = 4; // Direct deposit via cashier
 }
 
 // ── ConfirmTransaction ────────────────────────────────────────────────────────
@@ -103,6 +110,36 @@ message GetBalanceResponse {
   Money  available       = 2;
   Money  bets_in_flight  = 3; // Reserved stake for unsettled bets
   Money  total           = 4; // available + bets_in_flight
+}
+
+// ── Deposit ───────────────────────────────────────────────────────────────────
+
+message DepositRequest {
+  string transaction_id = 1;
+  string user_id = 2;
+  Money amount = 3;
+  string payment_method = 4;
+}
+
+message DepositResponse {
+  string transaction_id = 1;
+  LedgerEntryStatus status = 2;
+  Money available_after = 3;
+}
+
+// ── Withdraw ──────────────────────────────────────────────────────────────────
+
+message WithdrawRequest {
+  string transaction_id = 1;
+  string user_id = 2;
+  Money amount = 3;
+  string payment_method = 4;
+}
+
+message WithdrawResponse {
+  string transaction_id = 1;
+  LedgerEntryStatus status = 2;
+  Money available_after = 3;
 }
 
 // ── Shared enums ──────────────────────────────────────────────────────────────

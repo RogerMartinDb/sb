@@ -134,3 +134,49 @@ export async function register(email: string, password: string): Promise<string>
   const res = await post<{ access_token: string }>('/identity/auth/register', { email, password })
   return res.access_token
 }
+
+export interface BalanceResponse {
+  available_minor: number;
+  currency: string;
+}
+
+export interface CashierResponse {
+  transaction_id: string;
+  status: string;
+  available_after: number;
+  currency: string;
+}
+
+export async function getBalance(token: string): Promise<BalanceResponse> {
+  const res = await fetch('/cashier/balance', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch balance');
+  return res.json();
+}
+
+export async function deposit(token: string, amountDollars: number, paymentMethod: string): Promise<CashierResponse> {
+  const res = await fetch('/cashier/deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ amount_dollars: amountDollars, payment_method: paymentMethod }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(data.error || 'Deposit failed'), { status: res.status, data });
+  }
+  return res.json();
+}
+
+export async function withdraw(token: string, amountDollars: number, paymentMethod: string): Promise<CashierResponse> {
+  const res = await fetch('/cashier/withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ amount_dollars: amountDollars, payment_method: paymentMethod }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw Object.assign(new Error(data.error || 'Withdraw failed'), { status: res.status, data });
+  }
+  return res.json();
+}
