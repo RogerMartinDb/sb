@@ -6,7 +6,10 @@ import type { OddsFormat } from '../App'
 interface Props {
   selectedBet: SelectedBet
   onClear: () => void
+  onBetPlaced?: () => void
   oddsFormat?: OddsFormat
+  token?: string | null
+  onLoginRequired?: () => void
 }
 
 function formatOdds(decimal: number, american: number, format: OddsFormat = 'american'): string {
@@ -17,13 +20,18 @@ function formatOdds(decimal: number, american: number, format: OddsFormat = 'ame
   }
 }
 
-export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' }: Props) {
+export default function BetSlip({ selectedBet, onClear, onBetPlaced, oddsFormat = 'american', token, onLoginRequired }: Props) {
   const [stake, setStake] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PlaceBetResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function handlePlaceBet() {
+    if (!token) {
+      onLoginRequired?.()
+      return
+    }
+
     const stakeMinor = Math.round(parseFloat(stake) * 100)
     if (isNaN(stakeMinor) || stakeMinor <= 0) {
       setError('Enter a valid stake')
@@ -37,13 +45,17 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
     try {
       const resp = await placeBet({
         market_id: selectedBet.market_id,
+        market_name: selectedBet.market_name,
         selection_id: selectedBet.selection_id,
+        selection_name: selectedBet.selection_name,
         odds_decimal: selectedBet.odds_decimal,
         odds_american: selectedBet.odds_american,
         stake_minor: stakeMinor,
         currency: 'USD',
       }, crypto.randomUUID())
       setResult(resp)
+      onBetPlaced?.()
+      setTimeout(() => { onClear() }, 1500)
     } catch (err) {
       if (err instanceof ApiError) {
         setError(friendlyError(err.code))

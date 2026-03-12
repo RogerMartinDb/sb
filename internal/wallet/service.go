@@ -352,6 +352,13 @@ func (s *Service) Deposit(ctx context.Context, req *sbv1.DepositRequest) (*sbv1.
 		return nil, status.Errorf(codes.Internal, "advisory lock: %v", err)
 	}
 
+	// Provision user_limits row with defaults on first deposit.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO user_limits (user_id) VALUES ($1) ON CONFLICT DO NOTHING`,
+		req.UserId); err != nil {
+		return nil, status.Errorf(codes.Internal, "provision user limits: %v", err)
+	}
+
 	var availMinor int64
 	var currency string
 	if err := tx.QueryRow(ctx,

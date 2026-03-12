@@ -77,8 +77,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	)
 
 	// ── Outbox relay ──────────────────────────────────────────────────────────
-	hostname, _ := os.Hostname()
-	relay, err := betacceptance.NewOutboxRelay(db, kafkaBrokers, "bet-acceptance-"+hostname, logger)
+	relay, err := betacceptance.NewOutboxRelay(db, kafkaBrokers, logger)
 	if err != nil {
 		return fmt.Errorf("outbox relay: %w", err)
 	}
@@ -119,7 +118,9 @@ func run(ctx context.Context, logger *slog.Logger) error {
 // placeBetHTTPRequest is the JSON body expected from the API Gateway.
 type placeBetHTTPRequest struct {
 	MarketID              string  `json:"market_id"`
+	MarketName            string  `json:"market_name"`
 	SelectionID           string  `json:"selection_id"`
+	SelectionName         string  `json:"selection_name"`
 	RequestedOddsDecimal  float64 `json:"odds_decimal"`
 	RequestedOddsAmerican int     `json:"odds_american"`
 	StakeMinor            int64   `json:"stake_minor"`
@@ -150,7 +151,9 @@ func makePlaceBetHandler(flow *betacceptance.BetFlow, logger *slog.Logger) http.
 			IdempotencyKey:        idemKey,
 			UserID:                userID,
 			MarketID:              body.MarketID,
+			MarketName:            body.MarketName,
 			SelectionID:           body.SelectionID,
+			SelectionName:         body.SelectionName,
 			RequestedOddsDecimal:  body.RequestedOddsDecimal,
 			RequestedOddsAmerican: body.RequestedOddsAmerican,
 			StakeMinor:            body.StakeMinor,

@@ -66,7 +66,9 @@ type PlaceBetRequest struct {
 	IdempotencyKey string
 	UserID         string
 	MarketID       string
+	MarketName     string
 	SelectionID    string
+	SelectionName  string
 	// RequestedOdds is the odds the client saw when placing the bet.
 	RequestedOddsDecimal  float64
 	RequestedOddsAmerican int
@@ -302,16 +304,18 @@ func checkLimits(req PlaceBetRequest, limits *sbv1.GetUserLimitsResponse) error 
 
 func buildBetPlacedPayload(betID string, req PlaceBetRequest, odds CachedOdds) (json.RawMessage, error) {
 	event := map[string]any{
-		"event_type":    "bet.placed",
-		"bet_id":        betID,
-		"user_id":       req.UserID,
-		"market_id":     req.MarketID,
-		"selection_id":  req.SelectionID,
-		"odds_decimal":  odds.Decimal,
-		"odds_american": odds.American,
-		"stake_minor":   req.StakeMinor,
-		"currency":      req.Currency,
-		"placed_at":     time.Now().UTC().Format(time.RFC3339Nano),
+		"event_type":     "bet.placed",
+		"bet_id":         betID,
+		"user_id":        req.UserID,
+		"market_id":      req.MarketID,
+		"market_name":    req.MarketName,
+		"selection_id":   req.SelectionID,
+		"selection_name": req.SelectionName,
+		"odds_decimal":   odds.Decimal,
+		"odds_american":  odds.American,
+		"stake_minor":    req.StakeMinor,
+		"currency":       req.Currency,
+		"placed_at":      time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	return json.Marshal(event)
 }

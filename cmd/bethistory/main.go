@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/sportsbook/sb/internal/bethistory"
+	"github.com/sportsbook/sb/internal/identity"
 )
 
 func main() {
@@ -56,17 +58,35 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		}
 	}()
 
+	// JWT validation (stateless — only needs the secret).
+	jwtSecret := []byte(envOr("JWT_SECRET", "dev-secret-change-in-production"))
+	identitySvc := identity.NewService(nil, nil, jwtSecret, logger)
+
+	jwtMiddleware := func(next http.HandlerFunc) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer ") {
+				http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
+				return
+			}
+			claims, err := identitySvc.ValidateToken(strings.TrimPrefix(auth, "Bearer "))
+			if err != nil {
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+			r.Header.Set("X-User-ID", claims.UserID)
+			next(w, r)
+		})
+	}
+
 	// HTTP API for "My Bets" UI.
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /bets", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /bets", jwtMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Header.Get("X-User-ID")
-		if userID == "" {
-			http.Error(w, `{"error":"missing X-User-ID"}`, http.StatusUnauthorized)
-			return
-		}
 		rows, err := db.Query(r.Context(), `
-			SELECT bet_id, market_id, selection_id, odds_decimal, odds_american,
-			       stake_minor, currency, status, placed_at, settled_at, payout_minor
+			SELECT bet_id, market_id, market_name, selection_id, selection_name,
+			       odds_decimal, odds_american, stake_minor, currency, status,
+			       placed_at, settled_at, payout_minor
 			FROM bets WHERE user_id = $1 ORDER BY placed_at DESC LIMIT 50`,
 			userID,
 		)
@@ -79,28 +99,31 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		var bets []map[string]any
 		for rows.Next() {
 			var (
-				betID, marketID, selectionID, currency, status string
-				oddsDecimal                                    float64
-				oddsAmerican                                   int
-				stakeMinor                                     int64
-				placedAt                                       time.Time
-				settledAt                                      *time.Time
-				payoutMinor                                    *int64
+				betID, marketID, marketName, selectionID, selectionName, currency, status string
+				oddsDecimal                                                               float64
+				oddsAmerican                                                              int
+				stakeMinor                                                                int64
+				placedAt                                                                  time.Time
+				settledAt                                                                 *time.Time
+				payoutMinor                                                               *int64
 			)
-			if err := rows.Scan(&betID, &marketID, &selectionID, &oddsDecimal, &oddsAmerican,
-				&stakeMinor, &currency, &status, &placedAt, &settledAt, &payoutMinor); err != nil {
+			if err := rows.Scan(&betID, &marketID, &marketName, &selectionID, &selectionName,
+				&oddsDecimal, &oddsAmerican, &stakeMinor, &currency, &status,
+				&placedAt, &settledAt, &payoutMinor); err != nil {
 				continue
 			}
 			b := map[string]any{
-				"bet_id":        betID,
-				"market_id":     marketID,
-				"selection_id":  selectionID,
-				"odds_decimal":  oddsDecimal,
-				"odds_american": oddsAmerican,
-				"stake_minor":   stakeMinor,
-				"currency":      currency,
-				"status":        status,
-				"placed_at":     placedAt.Format(time.RFC3339),
+				"bet_id":         betID,
+				"market_id":      marketID,
+				"market_name":    marketName,
+				"selection_id":   selectionID,
+				"selection_name": selectionName,
+				"odds_decimal":   oddsDecimal,
+				"odds_american":  oddsAmerican,
+				"stake_minor":    stakeMinor,
+				"currency":       currency,
+				"status":         status,
+				"placed_at":      placedAt.Format(time.RFC3339),
 			}
 			if settledAt != nil {
 				b["settled_at"] = settledAt.Format(time.RFC3339)
@@ -115,7 +138,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"bets": bets})
-	})
+	}))
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

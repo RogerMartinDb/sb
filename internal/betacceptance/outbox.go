@@ -51,7 +51,7 @@ type OutboxRelay struct {
 
 // NewOutboxRelay creates a relay backed by the given DB pool and a transactional
 // Kafka producer. transactionalID must be unique per producer instance (e.g. hostname).
-func NewOutboxRelay(db *pgxpool.Pool, brokers []string, transactionalID string, logger *slog.Logger) (*OutboxRelay, error) {
+func NewOutboxRelay(db *pgxpool.Pool, brokers []string, logger *slog.Logger) (*OutboxRelay, error) {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V3_6_0_0
 
@@ -61,8 +61,9 @@ func NewOutboxRelay(db *pgxpool.Pool, brokers []string, transactionalID string, 
 	cfg.Producer.RequiredAcks = sarama.WaitForAll
 	cfg.Producer.Return.Successes = true
 	cfg.Producer.Return.Errors = true
-	cfg.Producer.Transaction.ID = transactionalID
-	cfg.Producer.Transaction.Timeout = 30 * time.Second
+	// Transaction.ID is intentionally omitted: SyncProducer requires explicit
+	// BeginTxn/CommitTxn lifecycle that isn't used here. Idempotent=true is
+	// sufficient — the broker deduplicates retries via producer epoch.
 
 	producer, err := sarama.NewSyncProducer(brokers, cfg)
 	if err != nil {

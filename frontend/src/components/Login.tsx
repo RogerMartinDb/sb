@@ -27,7 +27,7 @@ export default function Login({ onLogin, onSwitchToRegister }: Props) {
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: '80px auto', fontFamily: 'sans-serif', padding: 24, border: '1px solid #ddd', borderRadius: 8 }}>
+    <div style={{ maxWidth: 320, margin: '80px auto', fontFamily: 'sans-serif', padding: 24, border: '1px solid #ddd', borderRadius: 8, background: '#fff', color: '#000' }}>
       <h2 style={{ marginBottom: 16 }}>Sign in</h2>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: 12 }}>

@@ -216,6 +216,18 @@ export default function App() {
     }
   }
 
+  async function handleBetPlaced() {
+    setTab('mybets')
+    if (token) {
+      try {
+        const bal = await getBalance(token)
+        setBalance(bal.available_minor)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   function handleLogout() {
     setAuthToken(null)
     setToken(null)
@@ -236,7 +248,7 @@ export default function App() {
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(0,0,0,0.6)',
-            zIndex: 100,
+            zIndex: 1000,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -488,7 +500,7 @@ export default function App() {
             {/* Desktop betslip sidebar */}
             {!isMobile && selectedBet && (
               <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16 }}>
-                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
+                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} onBetPlaced={handleBetPlaced} oddsFormat={oddsFormat} token={token} onLoginRequired={() => setAuthModal('login')} />
               </div>
             )}
             {/* Mobile betslip — fixed to bottom of viewport */}
@@ -503,7 +515,7 @@ export default function App() {
                 borderTop: '1px solid #333',
                 boxShadow: '0 -4px 16px rgba(0,0,0,0.4)',
               }}>
-                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
+                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} onBetPlaced={handleBetPlaced} oddsFormat={oddsFormat} token={token} onLoginRequired={() => setAuthModal('login')} />
               </div>
             )}
           </div>

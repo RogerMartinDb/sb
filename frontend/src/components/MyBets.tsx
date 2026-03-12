@@ -50,34 +50,38 @@ export default function MyBets({ oddsFormat = 'american' }: Props) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>My Bets</h2>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {bets.map(bet => (
           <li
             key={bet.bet_id}
             style={{
-              border: '1px solid #ddd',
+              background: '#0d1f3c',
+              border: '1px solid #1c3354',
               borderRadius: 8,
               padding: 12,
               marginBottom: 10,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: '#555' }}>
-                {bet.selection_id}
+              <span style={{ fontSize: 13, color: '#a0b4c8' }}>
+                {bet.market_name || bet.market_id}
               </span>
               <span
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: STATUS_COLOURS[bet.status] ?? '#555',
+                  color: STATUS_COLOURS[bet.status] ?? '#a0b4c8',
                 }}
               >
                 {bet.status.replace('_', ' ')}
               </span>
             </div>
 
-            <div style={{ fontSize: 13, marginBottom: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#fff' }}>
+              {bet.selection_name || bet.selection_id}
+            </div>
+
+            <div style={{ fontSize: 13, marginBottom: 4, color: '#c8d8e8' }}>
               Odds: <strong>{formatOdds(bet.odds_decimal, bet.odds_american, oddsFormat)}</strong>
               {' · '}
               Stake: <strong>${(bet.stake_minor / 100).toFixed(2)}</strong>
@@ -86,7 +90,7 @@ export default function MyBets({ oddsFormat = 'american' }: Props) {
               )}
             </div>
 
-            <div style={{ fontSize: 11, color: '#aaa' }}>
+            <div style={{ fontSize: 11, color: '#6b849e' }}>
               Placed: {new Date(bet.placed_at).toLocaleString()}
               {bet.settled_at && ` · Settled: ${new Date(bet.settled_at).toLocaleString()}`}
             </div>

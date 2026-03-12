@@ -76,16 +76,15 @@ run-cashier:
 	go run ./cmd/cashier
 
 # ── Migrations ────────────────────────────────────────────────────────────────
-migrate-all: migrate-bet-acceptance migrate-wallet migrate-cashier migrate-odds migrate-catalog migrate-bet-history migrate-settlement migrate-identity
+migrate-all: migrate-bet-acceptance migrate-wallet migrate-odds migrate-catalog migrate-bet-history migrate-settlement migrate-identity
 
 migrate-bet-acceptance:
 	psql "postgres://sb:sb_secret@localhost:15432/db_bet_acceptance" -f migrations/db_bet_acceptance/001_init.sql
 
 migrate-wallet:
 	psql "postgres://sb:sb_secret@localhost:5433/db_wallet" -f migrations/db_wallet/001_init.sql
-
-migrate-cashier:
 	psql "postgres://sb:sb_secret@localhost:5433/db_wallet" -f migrations/db_wallet/002_usd_and_cashier_types.sql
+	psql "postgres://sb:sb_secret@localhost:5433/db_wallet" -f migrations/db_wallet/003_update_default_limits.sql 
 
 migrate-odds:
 	psql "postgres://sb:sb_secret@localhost:5434/db_odds" -f migrations/db_odds/001_init.sql
@@ -103,6 +102,7 @@ truncate-events:
 migrate-bet-history:
 	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/001_init.sql
 	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/002_american_decimal_odds.sql
+	psql "postgres://sb:sb_secret@localhost:5436/db_bet_history" -f migrations/db_bet_history/003_add_names.sql
 
 migrate-settlement:
 	psql "postgres://sb:sb_secret@localhost:5437/db_settlement" -f migrations/db_settlement/001_init.sql

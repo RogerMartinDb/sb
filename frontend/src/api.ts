@@ -40,7 +40,9 @@ export interface Event {
 
 export interface PlaceBetRequest {
   market_id: string
+  market_name: string
   selection_id: string
+  selection_name: string
   odds_decimal: number
   odds_american: number
   stake_minor: number
@@ -60,7 +62,9 @@ export interface PlaceBetResponse {
 export interface Bet {
   bet_id: string
   market_id: string
+  market_name: string
   selection_id: string
+  selection_name: string
   odds_decimal: number
   odds_american: number
   stake_minor: number
