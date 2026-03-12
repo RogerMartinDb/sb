@@ -36,9 +36,14 @@ function formatOdds(decimal: number, american: number, format: OddsFormat): stri
 
 function formatLine(sel: Selection, market: Market): string {
   switch (market.market_type) {
-    case 'SPREAD':
-    case 'TOTAL':
-      return sel.name
+    case 'SPREAD': {
+      const v = sel.target_value
+      return v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1)
+    }
+    case 'TOTAL': {
+      const v = sel.target_value
+      return v >= 0 ? `O ${v.toFixed(1)}` : `U ${Math.abs(v).toFixed(1)}`
+    }
     default:
       return ''
   }
@@ -577,7 +582,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                             market_id: market.market_id,
                             market_name: market.name,
                             selection_id: sel.selection_id,
-                            selection_name: formatLine(sel, market) || sel.name,
+                            selection_name: sel.name,
                             odds_decimal: sel.odds_decimal,
                             odds_american: sel.odds_american,
                           })
@@ -684,7 +689,7 @@ export default function EventList({ onSelectBet, competitionId, groupByDate = tr
                                     market_id: altMarket.market_id,
                                     market_name: altMarket.name,
                                     selection_id: sel.selection_id,
-                                    selection_name: formatLine(sel, altMarket) || sel.name,
+                                    selection_name: sel.name,
                                     odds_decimal: sel.odds_decimal,
                                     odds_american: sel.odds_american,
                                   })

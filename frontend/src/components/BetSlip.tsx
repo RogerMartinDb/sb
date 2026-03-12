@@ -4,7 +4,7 @@ import type { SelectedBet } from './EventList'
 import type { OddsFormat } from '../App'
 
 interface Props {
-  selectedBet: SelectedBet
+  selectedBet: SelectedBet | null
   onClear: () => void
   onBetPlaced?: () => void
   oddsFormat?: OddsFormat
@@ -25,6 +25,22 @@ export default function BetSlip({ selectedBet, onClear, onBetPlaced, oddsFormat 
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PlaceBetResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const containerStyle = {
+    background: '#0d1f3c',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 16,
+  }
+
+  if (!selectedBet) {
+    return (
+      <div style={{ ...containerStyle, border: '1px solid #1c3354' }}>
+        <h3 style={{ fontSize: 15, margin: '0 0 12px', color: '#fff' }}>Bet Slip</h3>
+        <p style={{ fontSize: 13, color: '#6b849e', margin: 0 }}>Select a market to add a bet.</p>
+      </div>
+    )
+  }
 
   async function handlePlaceBet() {
     if (!token) {
@@ -65,13 +81,6 @@ export default function BetSlip({ selectedBet, onClear, onBetPlaced, oddsFormat 
     } finally {
       setLoading(false)
     }
-  }
-
-  const containerStyle = {
-    background: '#0d1f3c',
-    color: '#fff',
-    borderRadius: 8,
-    padding: 16,
   }
 
   if (result) {

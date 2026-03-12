@@ -294,7 +294,7 @@ export default function App() {
         />
       )}
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 12px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px' }}>
         <div style={{
           position: 'sticky',
           top: 0,
@@ -484,7 +484,11 @@ export default function App() {
               transition: 'left 0.25s ease',
               overflowY: 'auto',
               paddingTop: 16,
-            } : {}}>
+            } : {
+              position: 'sticky',
+              top: 110,
+              alignSelf: 'flex-start',
+            }}>
               {isMobile && (
                 <button
                   onClick={() => setMenuOpen(false)}
@@ -520,8 +524,8 @@ export default function App() {
               />
             </div>
             {/* Desktop betslip sidebar */}
-            {!isMobile && selectedBet && (
-              <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16 }}>
+            {!isMobile && (
+              <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 110, alignSelf: 'flex-start' }}>
                 <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} onBetPlaced={handleBetPlaced} oddsFormat={oddsFormat} token={token} onLoginRequired={() => setAuthModal('login')} />
               </div>
             )}
