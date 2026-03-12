@@ -14,7 +14,7 @@ import (
 
 const (
 	// TopicOddsUpdated is the topic this updater consumes.
-	TopicOddsUpdated = "odds.updated"
+	TopicOddsUpdated = "odds-updated"
 
 	// ConsumerGroupOdds is the Kafka consumer group for the cache updater.
 	// This is DISTINCT from odds-management-cg (which processes bet.placed).

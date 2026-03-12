@@ -67,7 +67,7 @@ func (c *Consumer) Run(ctx context.Context, brokers []string) error {
 	}
 	defer cg.Close()
 
-	topics := []string{"bet.placed", "bet.settled", "bet.voided"}
+	topics := []string{"bet-placed", "bet-settled", "bet-voided"}
 	handler := &betHistoryHandler{consumer: c}
 
 	for {

@@ -168,7 +168,7 @@ func (s *IngestionService) publish(event *NormalisedMarketEvent) error {
 	}
 
 	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
-		Topic: "market-data.normalised",
+		Topic: "market-data-normalised",
 		Key:   sarama.StringEncoder(key),
 		Value: sarama.ByteEncoder(data),
 	})

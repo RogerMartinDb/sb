@@ -38,7 +38,7 @@ func ConsumeOddsUpdates(ctx context.Context, brokers []string, broadcaster *Broa
 
 	handler := &oddsWSHandler{broadcaster: broadcaster, logger: logger}
 	for {
-		if err := cg.Consume(ctx, []string{"odds.updated"}, handler); err != nil {
+		if err := cg.Consume(ctx, []string{"odds-updated"}, handler); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}

@@ -324,7 +324,7 @@ func (f *BetFlow) writeOutboxPending(ctx context.Context, betID, marketID string
 	_, err := f.db.Exec(ctx, `
 		INSERT INTO outbox (id, bet_id, topic, partition_key, payload, status, created_at)
 		VALUES             ($1,  $2,   $3,    $4,            $5,      $6,    NOW())`,
-		uuid.New().String(), betID, "bet.placed", marketID, payload, OutboxStatusPending,
+		uuid.New().String(), betID, "bet-placed", marketID, payload, OutboxStatusPending,
 	)
 	return err
 }

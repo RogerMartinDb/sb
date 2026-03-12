@@ -36,15 +36,15 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data.raw           --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data.normalised    --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds.updated              --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds.suspended            --partitions 12 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.placed                --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.settled               --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.voided                --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet.recorded              --partitions 24 --replication-factor 1
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic wallet.transaction        --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data-raw           --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic market-data-normalised    --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds-updated              --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic odds-suspended            --partitions 12 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet-placed                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet-settled               --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet-voided                --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic bet-recorded              --partitions 24 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic wallet-transaction        --partitions 24 --replication-factor 1
 
   # ── PostgreSQL databases ───────────────────────────────────────────────────
   db-bet-acceptance:

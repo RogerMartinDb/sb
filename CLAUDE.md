@@ -51,11 +51,11 @@ make frontend-install && make frontend-dev   # React dev server on :3000
 |---|---|
 | **Bet Acceptance** | Synchronous HTTP bet placement; owns `outbox` table |
 | **Account & Wallet** | Double-entry ledger; gRPC server |
-| **Odds Management** | Consumes `price.update` from `market-data.normalised`; writes odds to DB + Redis + publishes `odds.updated` |
-| **Market Catalog** | Consumes `catalog.upsert` + `game.state` from `market-data.normalised`; upserts sports/events/markets/selections/live scores to DB; gRPC + HTTP server |
-| **Market Data Ingestion** | Polls external sources (Polymarket, NBA scores); normalises → `market-data.normalised`. Single gateway for all external data. |
-| **Bet History** | Consumes `bet.placed`, `bet.settled`; gRPC reads for UI |
-| **Settlement** | Consumes `bet.settled`; triggers `wallet.CreditBalance` |
+| **Odds Management** | Consumes `price.update` from `market-data-normalised`; writes odds to DB + Redis + publishes `odds-updated` |
+| **Market Catalog** | Consumes `catalog.upsert` + `game.state` from `market-data-normalised`; upserts sports/events/markets/selections/live scores to DB; gRPC + HTTP server |
+| **Market Data Ingestion** | Polls external sources (Polymarket, NBA scores); normalises → `market-data-normalised`. Single gateway for all external data. |
+| **Bet History** | Consumes `bet-placed`, `bet-settled`; gRPC reads for UI |
+| **Settlement** | Consumes `bet-settled`; triggers `wallet.CreditBalance` |
 | **Identity/Auth** | JWT issuance; owns users/sessions tables |
 
 ### Message bus
@@ -63,15 +63,15 @@ make frontend-install && make frontend-dev   # React dev server on :3000
 Kafka (KRaft, single node in dev). Topics partition by **market_id** for market/odds events, **user_id** for bet/wallet events:
 
 ```
-market-data.raw          partitions: 12
-market-data.normalised   partitions: 12
-odds.updated             partitions: 12
-odds.suspended           partitions: 12
-bet.placed               partitions: 24
-bet.settled              partitions: 24
-bet.voided               partitions: 24
-bet.recorded             partitions: 24
-wallet.transaction       partitions: 24
+market-data-raw          partitions: 12
+market-data-normalised   partitions: 12
+odds-updated             partitions: 12
+odds-suspended           partitions: 12
+bet-placed               partitions: 24
+bet-settled              partitions: 24
+bet-voided               partitions: 24
+bet-recorded             partitions: 24
+wallet-transaction       partitions: 24
 ```
 
 ### gRPC connections (synchronous)
@@ -111,10 +111,10 @@ Transaction pooling for all services **except Account & Wallet**, which uses ses
 
 ### Lag check (`internal/betacceptance/lag_checker.go`)
 
-Answers: "Has the `odds-management-cg` consumer group processed all prior `bet.placed` messages on this partition?"
+Answers: "Has the `odds-management-cg` consumer group processed all prior `bet-placed` messages on this partition?"
 
 ```
-lag = client.GetOffset(bet.placed, partition, OffsetNewest)
+lag = client.GetOffset(bet-placed, partition, OffsetNewest)
     - admin.ListConsumerGroupOffsets("odds-management-cg", partition).Offset
 ```
 
@@ -124,7 +124,7 @@ Cached 200ms in `redis-ratelimit`. **Fail-CLOSED**: any Kafka admin error → `(
 
 Polls every 100ms for `READY_TO_PUBLISH` rows using `SELECT FOR UPDATE SKIP LOCKED`. Uses an idempotent transactional Sarama producer (`cfg.Producer.Idempotent = true`, `cfg.Producer.Transaction.ID`). If `markPublished` fails after a successful Kafka send, the row stays `READY_TO_PUBLISH` and the broker deduplicates the retry via producer epoch.
 
-**Do not pre-commit the Kafka offset in Odds Management** before writing odds to DB and publishing `odds.updated` — this would make the lag check ineffective.
+**Do not pre-commit the Kafka offset in Odds Management** before writing odds to DB and publishing `odds-updated` — this would make the lag check ineffective.
 
 ### Wallet double-entry invariant
 

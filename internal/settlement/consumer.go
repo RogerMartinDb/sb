@@ -52,7 +52,7 @@ func (c *Consumer) Run(ctx context.Context, brokers []string) error {
 
 	handler := &settlementHandler{consumer: c}
 	for {
-		if err := cg.Consume(ctx, []string{"market-data.normalised"}, handler); err != nil {
+		if err := cg.Consume(ctx, []string{"market-data-normalised"}, handler); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -206,7 +206,7 @@ func (c *Consumer) settleBet(
 		"settled_at":   settledAt.UTC().Format(time.RFC3339Nano),
 	})
 	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
-		Topic: "bet.settled",
+		Topic: "bet-settled",
 		Key:   sarama.StringEncoder(userID),
 		Value: sarama.ByteEncoder(payload),
 	})

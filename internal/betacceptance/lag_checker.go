@@ -18,7 +18,7 @@ const (
 
 	// TopicBetPlaced is the topic whose lag we check to ensure Odds Management
 	// has processed all prior bet.placed events before we accept a large new bet.
-	TopicBetPlaced = "bet.placed"
+	TopicBetPlaced = "bet-placed"
 
 	// OddsManagementConsumerGroup is the group whose committed offsets we compare
 	// against the log-end offset to compute lag.

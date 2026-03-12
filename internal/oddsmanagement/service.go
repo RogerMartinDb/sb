@@ -76,7 +76,7 @@ func (s *Service) RunConsumer(ctx context.Context, brokers []string) error {
 	}
 	defer cg.Close()
 
-	topics := []string{"market-data.normalised", "bet.placed"}
+	topics := []string{"market-data-normalised", "bet-placed"}
 	handler := &oddsHandler{svc: s}
 
 	s.logger.Info("odds management: consumer started", "group", OddsManagementConsumerGroup, "topics", topics)
@@ -273,7 +273,7 @@ func (s *Service) writeOddsAndPublish(ctx context.Context, marketID, selectionID
 		return fmt.Errorf("marshal odds.updated: %w", err)
 	}
 	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
-		Topic: "odds.updated",
+		Topic: "odds-updated",
 		Key:   sarama.StringEncoder(marketID),
 		Value: sarama.ByteEncoder(data),
 	})

@@ -29,7 +29,7 @@ func ConsumeNormalisedFeed(ctx context.Context, brokers []string, db *pgxpool.Po
 
 	handler := &catalogFeedHandler{db: db, broadcaster: broadcaster, logger: logger}
 	for {
-		if err := cg.Consume(ctx, []string{"market-data.normalised"}, handler); err != nil {
+		if err := cg.Consume(ctx, []string{"market-data-normalised"}, handler); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
