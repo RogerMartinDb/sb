@@ -55,13 +55,20 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
     }
   }
 
+  const containerStyle = {
+    background: '#0d1f3c',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 16,
+  }
+
   if (result) {
     return (
-      <div style={{ border: '1px solid #4caf50', borderRadius: 8, padding: 16 }}>
-        <h3 style={{ color: '#4caf50' }}>Bet Accepted</h3>
-        <p>Bet ID: <code>{result.bet_id}</code></p>
-        <p>Odds: {formatOdds(result.odds_decimal, result.odds_american, oddsFormat)}</p>
-        <p>Stake: ${(result.stake / 100).toFixed(2)}</p>
+      <div style={{ ...containerStyle, border: '1px solid #4caf50' }}>
+        <h3 style={{ color: '#4caf50', margin: '0 0 12px' }}>Bet Accepted</h3>
+        <p style={{ margin: '0 0 6px' }}>Bet ID: <code>{result.bet_id}</code></p>
+        <p style={{ margin: '0 0 6px' }}>Odds: {formatOdds(result.odds_decimal, result.odds_american, oddsFormat)}</p>
+        <p style={{ margin: '0 0 12px' }}>Stake: ${(result.stake / 100).toFixed(2)}</p>
         <button onClick={() => { setResult(null); setStake(''); onClear() }}>
           Place Another Bet
         </button>
@@ -70,19 +77,19 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
   }
 
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
+    <div style={{ ...containerStyle, border: '1px solid #1c3354' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <h3 style={{ fontSize: 15, margin: 0 }}>Bet Slip</h3>
-        <button onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999' }}>✕</button>
+        <h3 style={{ fontSize: 15, margin: 0, color: '#fff' }}>Bet Slip</h3>
+        <button onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b849e', fontSize: 16 }}>✕</button>
       </div>
 
-      <p style={{ fontSize: 14, marginBottom: 4 }}>{selectedBet.market_name}</p>
-      <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+      <p style={{ fontSize: 14, marginBottom: 4, color: '#a0b4c8' }}>{selectedBet.market_name}</p>
+      <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#fff' }}>
         {selectedBet.selection_name} @ {formatOdds(selectedBet.odds_decimal, selectedBet.odds_american, oddsFormat)}
       </p>
 
       <div style={{ marginBottom: 12 }}>
-        <label>
+        <label style={{ color: '#a0b4c8', fontSize: 13 }}>
           Stake ($)
           <br />
           <input
@@ -91,19 +98,19 @@ export default function BetSlip({ selectedBet, onClear, oddsFormat = 'american' 
             step="0.01"
             value={stake}
             onChange={e => setStake(e.target.value)}
-            style={{ padding: 8, width: 120, marginTop: 4 }}
+            style={{ padding: 8, width: 120, marginTop: 4, background: '#07152b', color: '#fff', border: '1px solid #1c3354', borderRadius: 4 }}
             placeholder="0.00"
           />
         </label>
       </div>
 
       {stake && !isNaN(parseFloat(stake)) && parseFloat(stake) > 0 && (
-        <p style={{ fontSize: 13, color: '#555' }}>
+        <p style={{ fontSize: 13, color: '#a0b4c8', marginBottom: 12 }}>
           Potential return: ${(parseFloat(stake) * selectedBet.odds_decimal).toFixed(2)}
         </p>
       )}
 
-      {error && <p style={{ color: 'red', fontSize: 14 }}>{error}</p>}
+      {error && <p style={{ color: '#e74c3c', fontSize: 14 }}>{error}</p>}
 
       <button
         onClick={handlePlaceBet}

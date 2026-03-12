@@ -477,19 +477,35 @@ export default function App() {
                 }}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: isMobile && selectedBet ? 220 : 0 }}>
               <EventList
                 onSelectBet={setSelectedBet}
                 competitionId={competitionFilter}
                 groupByDate={competitionFilter !== '__live__' && !SPORTS.find(s => s.id === 'politics')?.competitions.some(c => c.id === competitionFilter)}
                 oddsFormat={oddsFormat}
               />
-              {selectedBet && (
-                <div style={{ marginTop: 16 }}>
-                  <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
-                </div>
-              )}
             </div>
+            {/* Desktop betslip sidebar */}
+            {!isMobile && selectedBet && (
+              <div style={{ width: 280, flexShrink: 0, position: 'sticky', top: 16 }}>
+                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
+              </div>
+            )}
+            {/* Mobile betslip — fixed to bottom of viewport */}
+            {isMobile && selectedBet && (
+              <div style={{
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 300,
+                background: '#0d1f3c',
+                borderTop: '1px solid #333',
+                boxShadow: '0 -4px 16px rgba(0,0,0,0.4)',
+              }}>
+                <BetSlip selectedBet={selectedBet} onClear={() => setSelectedBet(null)} oddsFormat={oddsFormat} />
+              </div>
+            )}
           </div>
         ) : (
           <MyBets oddsFormat={oddsFormat} />
