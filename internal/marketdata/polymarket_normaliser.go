@@ -94,8 +94,8 @@ func (n *PolymarketNormaliser) Normalise(raw RawProviderEvent) ([]NormalisedMark
 			continue
 		}
 
-		marketName := m.Name()
-		sels := buildSelections(ourType, outcomes, prices, m.Line)
+		marketName := buildMarketName(ev.Title, ourType, m.Line, m.Name())
+		sels := buildSelections(ourType, ev.Title, outcomes, prices, m.Line)
 		targetValue := 0.0
 		if len(sels) > 0 {
 			targetValue = sels[0].targetValue
@@ -158,7 +158,7 @@ func clampProb(p float64) float64 {
 	return p
 }
 
-func buildSelections(marketType string, outcomes, prices []string, line *float64) []selRow {
+func buildSelections(marketType, gameTitle string, outcomes, prices []string, line *float64) []selRow {
 	p0, _ := strconv.ParseFloat(prices[0], 64)
 	p1, _ := strconv.ParseFloat(prices[1], 64)
 	p0 = clampProb(p0)
@@ -172,15 +172,22 @@ func buildSelections(marketType string, outcomes, prices []string, line *float64
 		}
 	case "SPREAD":
 		l := derefLine(line)
+		t0, t1 := outcomes[0], outcomes[1]
+		for _, sep := range []string{" vs. ", " vs ", " @ ", "@"} {
+			if parts := strings.SplitN(gameTitle, sep, 2); len(parts) == 2 {
+				t0, t1 = parts[0], parts[1]
+				break
+			}
+		}
 		return []selRow{
-			{name: outcomes[0], targetValue: l, prob: p0},
-			{name: outcomes[1], targetValue: -l, prob: p1},
+			{name: fmt.Sprintf("%s %s", t0, formatLineSign(l)), targetValue: l, prob: p0},
+			{name: fmt.Sprintf("%s %s", t1, formatLineSign(-l)), targetValue: -l, prob: p1},
 		}
 	case "TOTAL":
 		l := absLine(line)
 		return []selRow{
-			{name: outcomes[0], targetValue: l, prob: p0},
-			{name: outcomes[1], targetValue: -l, prob: p1},
+			{name: fmt.Sprintf("Over %.1f", l), targetValue: l, prob: p0},
+			{name: fmt.Sprintf("Under %.1f", l), targetValue: -l, prob: p1},
 		}
 	default:
 		return []selRow{
@@ -266,4 +273,22 @@ func derefLine(line *float64) float64 {
 		return 0
 	}
 	return *line
+}
+
+func formatLineSign(v float64) string {
+	if v >= 0 {
+		return fmt.Sprintf("+%.1f", v)
+	}
+	return fmt.Sprintf("%.1f", v)
+}
+
+func buildMarketName(gameTitle, marketType string, line *float64, fallback string) string {
+	switch marketType {
+	case "SPREAD":
+		return fmt.Sprintf("%s Spread %s", gameTitle, formatLineSign(derefLine(line)))
+	case "TOTAL":
+		return fmt.Sprintf("%s Total %.1f", gameTitle, absLine(line))
+	default:
+		return fallback
+	}
 }

@@ -36,12 +36,9 @@ function formatOdds(decimal: number, american: number, format: OddsFormat): stri
 
 function formatLine(sel: Selection, market: Market): string {
   switch (market.market_type) {
-    case 'SPREAD': {
-      const sign = sel.target_value > 0 ? '+' : ''
-      return `${sign}${sel.target_value}`
-    }
+    case 'SPREAD':
     case 'TOTAL':
-      return sel.target_value > 0 ? `O ${Math.abs(sel.target_value)}` : `U ${Math.abs(sel.target_value)}`
+      return sel.name
     default:
       return ''
   }
