@@ -193,7 +193,20 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null)
   const [email, setEmail] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('events')
-  const [authModal, setAuthModal] = useState<AuthModal>(null)
+  const [authModal, setAuthModalState] = useState<AuthModal>(() => {
+    try {
+      const saved = sessionStorage.getItem('authModal')
+      return (saved === 'login' || saved === 'register') ? saved : null
+    } catch { return null }
+  })
+
+  function setAuthModal(val: AuthModal) {
+    setAuthModalState(val)
+    try {
+      if (val) sessionStorage.setItem('authModal', val)
+      else sessionStorage.removeItem('authModal')
+    } catch { /* ignore */ }
+  }
   const [selectedBet, setSelectedBet] = useState<SelectedBet | null>(null)
   const [competitionFilter, setCompetitionFilter] = useState<string>('nba')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -281,7 +294,14 @@ export default function App() {
         />
       )}
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 12px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 12px' }}>
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          background: C.bg,
+          paddingTop: 16,
+        }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {isMobile && tab === 'events' && (
@@ -436,7 +456,9 @@ export default function App() {
             <option value="cent">Cent</option>
           </select>
         </nav>
+        </div>
 
+        <div style={{ paddingTop: 16 }}>
         {tab === 'events' ? (
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
             {/* Mobile drawer overlay */}
@@ -522,6 +544,7 @@ export default function App() {
         ) : (
           <MyBets oddsFormat={oddsFormat} />
         )}
+        </div>
       </div>
     </div>
   )
